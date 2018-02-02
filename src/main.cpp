@@ -75,6 +75,7 @@ public:
 
         Model model;
         model.load("media/cat.obj");
+        model.load("media/hill.obj");
         m_vb->init_data(model.m_vertices);
         m_ib->init_data(model.m_indices);
         m_va->set_count(model.m_indices.size());

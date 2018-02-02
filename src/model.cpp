@@ -11,7 +11,7 @@ bool Model::load(const char* name) {
     FILE* f = fopen(name, "r");
     if (!f) return false;
 
-    std::map<std::tuple<int, int, int>, int> index_table;
+    std::map<std::tuple<int, int, int>, int> lookup;
     std::vector<glm::vec3> pos;
     std::vector<glm::vec3> norm;
 
@@ -38,12 +38,12 @@ bool Model::load(const char* name) {
                 std::get<0>(t) = atoi(strsep(&q, "/")) - 1;
                 if (q) std::get<1>(t) = atoi(strsep(&q, "/")) - 1;
                 if (q) std::get<2>(t) = atoi(q) - 1;
-                auto it = index_table.find(t);
-                if (it == index_table.end()) {
-                    index_table[t] = m_vertices.size();
+                auto it = lookup.find(t);
+                if (it == lookup.end()) {
+                    lookup[t] = m_vertices.size();
                     m_vertices.push_back(Vertex{ pos[std::get<0>(t)],
                                                  norm[std::get<2>(t)]}); }
-                m_indices.emplace_back(index_table[t]);
+                m_indices.emplace_back(lookup[t]);
             }
             if (*next() != '\0') LOG("model '%s' is not triangulated", name);
         }
