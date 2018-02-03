@@ -451,8 +451,8 @@ void Context::sync_render_state(const RenderState& rs) {
     }
     if (m_render_state.cull_face_enabled) {
         if (m_render_state.cull_face != rs.cull_face) {
+            m_render_state.cull_face = rs.cull_face;
             glCullFace(map_to_gl(m_render_state.cull_face));
-
         }
     }
 

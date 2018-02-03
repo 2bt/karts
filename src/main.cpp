@@ -76,7 +76,7 @@ public:
         varying float v_depth;
         void main() {
             float v = 1.0;
-            if (texture2D(depth_map, v_shadow_coord.xy).r < v_shadow_coord.z) {
+            if (texture2D(depth_map, v_shadow_coord.xy).r < v_shadow_coord.z + 0.003) {
                 v = 0.5;
             }
             vec3 col = normalize(v_norm) * 0.5 + vec3(0.5, 0.5, 0.5);
@@ -100,14 +100,16 @@ public:
         m_va->set_count(model.m_indices.size());
 
 
-        m_depth_map = rmw::context.create_texture_2D(rmw::TextureFormat::Depth, 1024, 1024);
+        m_depth_map = rmw::context.create_texture_2D(rmw::TextureFormat::Depth, 2 * 1024, 2 * 1024);
         m_framebuffer = rmw::context.create_framebuffer();
 
-        #ifdef __EMSCRIPTEN__
+#ifdef __EMSCRIPTEN__
         // the frame buffer is unhappy without color attachment :(
-        static auto foobar = rmw::context.create_texture_2D(rmw::TextureFormat::RGB, 1024, 1024);
+        static auto foobar = rmw::context.create_texture_2D(rmw::TextureFormat::RGB,
+                                                            m_depth_map->get_width(),
+                                                            m_depth_map->get_height());
         m_framebuffer->attach_color(foobar);
-        #endif
+#endif
 
         m_framebuffer->attach_depth(m_depth_map);
         if (!m_framebuffer->is_complete()) LOG("framebuffer incomplete");
@@ -150,7 +152,10 @@ public:
             depth_mvp = projection * view; // * model
             m_depth_shader->set_uniform("depth_mvp", depth_mvp);
 
+
+            rs.cull_face = rmw::CullFace::Front;
             rmw::context.draw(rs, m_depth_shader, m_va, m_framebuffer);
+            rs.cull_face = rmw::CullFace::Back;
         }
 
         // render scene with shadow
@@ -167,6 +172,7 @@ public:
                            0.5, 0.5, 0.5, 1.0);
             m_shader->set_uniform("depth_mvp", bias * depth_mvp);
             m_shader->set_uniform("depth_map", m_depth_map);
+
 
             rmw::context.draw(rs, m_shader, m_va);
         }
