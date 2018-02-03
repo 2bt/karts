@@ -1,3 +1,3 @@
 WIP
 
-[Try it in the browser!](https://2bt.github.io/karts/)
+[Try it in the browser!](https://2bt.github.io/karts/index.html)
