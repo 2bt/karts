@@ -40,7 +40,7 @@ struct Scene {
 class App {
 public:
     App() {
-        rmw::context.init(800, 600, "scene");
+        rmw::context.init(800, 600, "karts");
         // renderer2D.init();
         // renderer3D.init();
 

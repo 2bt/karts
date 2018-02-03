@@ -4,7 +4,7 @@ LF = -Wall --std=c++14 -lSDL2 -lSDL2_image -lGLEW -lGL
 CXX = g++
 SRC = $(wildcard src/*.cpp)
 OBJ = $(SRC:src/%.cpp=obj/%.o)
-TRG = scene
+TRG = karts
 
 all: $(TRG)
 
