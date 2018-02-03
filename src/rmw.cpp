@@ -218,15 +218,16 @@ bool Shader::init(const char* vs, const char* fs) {
         int location = glGetUniformLocation(m_program, name);
         Uniform::Ptr u;
         switch (type) {
-        case GL_FLOAT:        u = std::make_unique<UniformExtend<float>>(name, type, location); break;
+        case GL_FLOAT:      u = std::make_unique<UniformExtend<float>>(name, type, location); break;
         case GL_FLOAT_VEC2: u = std::make_unique<UniformExtend<glm::vec2>>(name, type, location); break;
         case GL_FLOAT_VEC3: u = std::make_unique<UniformExtend<glm::vec3>>(name, type, location); break;
         case GL_FLOAT_VEC4: u = std::make_unique<UniformExtend<glm::vec4>>(name, type, location); break;
+        case GL_FLOAT_MAT3: u = std::make_unique<UniformExtend<glm::mat3>>(name, type, location); break;
         case GL_FLOAT_MAT4: u = std::make_unique<UniformExtend<glm::mat4>>(name, type, location); break;
         case GL_SAMPLER_2D: u = std::make_unique<UniformTexture2D>(name, type, location); break;
 
         default:
-            fprintf(stderr, "Error: uniform '%s' has unknown type\n", name);
+            fprintf(stderr, "Error: uniform '%s' has unknown type (%d)\n", name, type);
             assert(false);
         }
         m_uniforms.push_back(std::move(u));
@@ -243,6 +244,7 @@ void gl_uniform(int l, float v) { glUniform1f(l, v); }
 void gl_uniform(int l, const glm::vec2& v) { glUniform2fv(l, 1, &v.x); }
 void gl_uniform(int l, const glm::vec3& v) { glUniform3fv(l, 1, &v.x); }
 void gl_uniform(int l, const glm::vec4& v) { glUniform4fv(l, 1, &v.x); }
+void gl_uniform(int l, const glm::mat3& v) { glUniformMatrix3fv(l, 1, false, &v[0].x); }
 void gl_uniform(int l, const glm::mat4& v) { glUniformMatrix4fv(l, 1, false, &v[0].x); }
 
 
@@ -416,15 +418,12 @@ bool Context::poll_event(SDL_Event& e) {
 }
 
 
-void Context::clear(const ClearState& cs, const Framebuffer::Ptr& fb) {
-
-    if (m_clear_state.color != cs.color) {
-        m_clear_state.color = cs.color;
-        glClearColor(m_clear_state.color.x, m_clear_state.color.y, m_clear_state.color.z, m_clear_state.color.w);
+void Context::clear(const glm::vec4& color, const Framebuffer::Ptr& fb) {
+    if (m_clear_color != color) {
+        m_clear_color = color;
+        glClearColor(m_clear_color.x, m_clear_color.y, m_clear_color.z, m_clear_color.w);
     }
-
     gl.bind_framebuffer(fb->m_handle);
-
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 

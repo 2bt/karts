@@ -12,12 +12,7 @@
 namespace rmw {
 
 
-// states
-
-struct ClearState {
-    glm::vec4 color;
-};
-
+// render state
 
 struct Viewport {
     int x = 0;
@@ -330,9 +325,9 @@ public:
     float get_aspect_ratio() const { return get_width() / (float) get_height(); }
 
 
-    void clear(const ClearState& cs, const Framebuffer::Ptr& fb);
-    void clear(const ClearState& cs) {
-        clear(cs, m_default_framebuffer);
+    void clear(const glm::vec4& color, const Framebuffer::Ptr& fb);
+    void clear(const glm::vec4& color) {
+        clear(color, m_default_framebuffer);
     }
 
     void draw(const RenderState& rs,
@@ -390,7 +385,7 @@ private:
     SDL_GLContext    m_gl_context;
 
     RenderState      m_render_state;
-    ClearState       m_clear_state;
+    glm::vec4        m_clear_color;
     const Shader*    m_shader;
 
     Framebuffer::Ptr m_default_framebuffer;

@@ -37,7 +37,7 @@ void Eye::update() {
     };
 
     m_pos += mov;
-    // LOG("%f %f %f %f %f", m_ang_x, m_ang_y, m_pos.x, m_pos.y, m_pos.z);
+//    LOG("eye: %f %f %f %f %f", m_ang_x, m_ang_y, m_pos.x, m_pos.y, m_pos.z);
 }
 
 

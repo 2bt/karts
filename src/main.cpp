@@ -3,11 +3,10 @@
 #include <emscripten.h>
 #endif
 #include "log.h"
-#include "renderer2d.h"
 #include "renderer3d.h"
 #include "rmw.h"
 #include "eye.h"
-#include "model.h"
+#include "mesh.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/transform.hpp>
 #include <cstdlib>
@@ -15,34 +14,41 @@
 #include <cmath>
 
 
-//Renderer2D renderer2D;
-//Renderer3D renderer3D;
+Renderer3D renderer3D;
 
 
-struct Thingo {
+struct Model {
     rmw::VertexBuffer::Ptr vb;
     rmw::IndexBuffer::Ptr  ib;
     rmw::VertexArray::Ptr  va;
     glm::mat4              transform;
+    // material
+    glm::vec3              color;
 };
 
 
 struct Light {
+    glm::mat4             mvp;
+    glm::vec4             pos;
+    glm::vec3             color;
+
+    rmw::Framebuffer::Ptr framebuffer;
+    rmw::Texture2D::Ptr   depth_map;
+
+    // only for spot lights
+    glm::vec3             dir;
+    float                 cosphi;
+    // float                 attenuation;
 };
 
 
-struct Scene {
-    std::vector<Thingo> thingos;
-    Light               light;
-};
 
 
 class App {
 public:
     App() {
         rmw::context.init(800, 600, "karts");
-        // renderer2D.init();
-        // renderer3D.init();
+        renderer3D.init();
 
         m_depth_shader = rmw::context.create_shader(R"(#version 100
         attribute vec3 a_pos;
@@ -59,13 +65,14 @@ public:
         attribute vec3 a_norm;
         uniform mat4 mvp;
         uniform mat4 depth_mvp;
+        uniform mat3 normal_mtx;
         varying vec4 v_shadow_coord;
         varying vec3 v_norm;
         varying float v_depth;
         void main() {
             gl_Position = mvp * vec4(a_pos, 1.0);
             v_shadow_coord = depth_mvp * vec4(a_pos, 1.0);
-            v_norm = a_norm;
+            v_norm = normalize(normal_mtx * a_norm);
             v_depth = gl_Position.z;
         })",
         R"(#version 100
@@ -83,31 +90,37 @@ public:
             gl_FragColor = vec4(col * pow(0.85, v_depth), 1.0) * v;
         })");
 
-        m_vb = rmw::context.create_vertex_buffer(rmw::BufferHint::StreamDraw);
-        m_ib = rmw::context.create_index_buffer(rmw::BufferHint::StreamDraw);
 
-        m_va = rmw::context.create_vertex_array();
-        m_va->set_primitive_type(rmw::PrimitiveType::Triangles);
-        m_va->set_attribute(0, m_vb, rmw::ComponentType::Float, 3, false, 0, 24);
-        m_va->set_attribute(1, m_vb, rmw::ComponentType::Float, 3, false, 12, 24);
-        m_va->set_index_buffer(m_ib);
 
-        Model model;
-        model.load("media/cat.obj");
-        model.load("media/hill.obj");
-        m_vb->init_data(model.m_vertices);
-        m_ib->init_data(model.m_indices);
-        m_va->set_count(model.m_indices.size());
+        // init models
+        for (const char* name : { "media/cat.obj", "media/hill.obj" }) {
+            Model model;
+            model.vb = rmw::context.create_vertex_buffer(rmw::BufferHint::StreamDraw);
+            model.ib = rmw::context.create_index_buffer(rmw::BufferHint::StreamDraw);
+            model.va = rmw::context.create_vertex_array();
+            model.va->set_primitive_type(rmw::PrimitiveType::Triangles);
+            model.va->set_attribute(0, model.vb, rmw::ComponentType::Float, 3, false, 0, 24);
+            model.va->set_attribute(1, model.vb, rmw::ComponentType::Float, 3, false, 12, 24);
+            model.va->set_index_buffer(model.ib);
+
+            Mesh mesh;
+            mesh.load(name);
+            model.vb->init_data(mesh.vertices);
+            model.ib->init_data(mesh.indices);
+            model.va->set_count(mesh.indices.size());
+
+            m_models.emplace_back(std::move(model));
+        }
 
 
         m_depth_map = rmw::context.create_texture_2D(rmw::TextureFormat::Depth, 2 * 1024, 2 * 1024);
         m_framebuffer = rmw::context.create_framebuffer();
 
 #ifdef __EMSCRIPTEN__
-        // the frame buffer is unhappy without color attachment :(
-        static auto foobar = rmw::context.create_texture_2D(rmw::TextureFormat::RGB,
-                                                            m_depth_map->get_width(),
-                                                            m_depth_map->get_height());
+        // XXX: the webgl framebuffer is unhappy without color attachment :(
+        // is there a trick to get around this?
+        static auto foobar = rmw::context.create_texture_2D(
+                rmw::TextureFormat::RGB, m_depth_map->get_width(), m_depth_map->get_height());
         m_framebuffer->attach_color(foobar);
 #endif
 
@@ -139,42 +152,63 @@ public:
         rmw::RenderState rs;
         rs.depth_test_enabled = true;
 
-        // render depth map
-        glm::mat4 depth_mvp;
-        {
-            rmw::context.clear(rmw::ClearState { { 0, 0, 0, 1 } }, m_framebuffer);
+        // rotate cat
+        static double t = 0;
+        t += 0.01;
+        m_models[0].transform = glm::translate(glm::vec3(0, 1, 0)) *
+                                glm::rotate<float>(t, glm::vec3(1, 0, 0)) *
+                                glm::translate(glm::vec3(0, -1, 0));
 
-            glm::mat4 projection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.0f, 20.0f);
-            glm::mat4 view = glm::lookAt(glm::vec3(-1, 10, 8),
+        glm::mat4 depth_mvp;
+        glm::vec3 light_pos;
+
+        // render depth map
+        {
+            rmw::context.clear({ 0, 0, 0, 1 }, m_framebuffer);
+
+
+            //light_pos = glm::vec3(sinf(t) * 8, 10, cosf(t) * 8);
+            light_pos = glm::vec3(1, 10, 7);
+
+            glm::mat4 view = glm::lookAt(light_pos,
                                          glm::vec3(0, 0, 0),
                                          glm::vec3(0, 1, 0));
-
-            depth_mvp = projection * view; // * model
-            m_depth_shader->set_uniform("depth_mvp", depth_mvp);
+            glm::mat4 projection = glm::ortho(-7.0f, 7.0f, -7.0f, 7.0f, 0.0f, 20.0f);
+            depth_mvp = projection * view;
 
 
             rs.cull_face = rmw::CullFace::Front;
-            rmw::context.draw(rs, m_depth_shader, m_va, m_framebuffer);
+            for (const Model& model : m_models) {
+                m_depth_shader->set_uniform("depth_mvp", depth_mvp * model.transform);
+                rmw::context.draw(rs, m_depth_shader, model.va, m_framebuffer);
+            }
             rs.cull_face = rmw::CullFace::Back;
         }
 
         // render scene with shadow
+        glm::mat4 mvp;
         {
-            rmw::context.clear(rmw::ClearState { { 0.1, 0.15, 0.25, 1 } });
+            rmw::context.clear({ 0.1, 0.15, 0.25, 1 });
+
+            m_shader->set_uniform("depth_map", m_depth_map);
 
             glm::mat4 projection = glm::perspective(glm::radians(60.0f),
                     rmw::context.get_aspect_ratio(), 0.1f, 100.0f);
-            m_shader->set_uniform("mvp", projection * m_eye.get_view_mtx());
 
-            glm::mat4 bias(0.5, 0.0, 0.0, 0.0,
-                           0.0, 0.5, 0.0, 0.0,
-                           0.0, 0.0, 0.5, 0.0,
-                           0.5, 0.5, 0.5, 1.0);
-            m_shader->set_uniform("depth_mvp", bias * depth_mvp);
-            m_shader->set_uniform("depth_map", m_depth_map);
+            mvp = projection * m_eye.get_view_mtx();
 
+            static const glm::mat4 bias = { 0.5, 0.0, 0.0, 0.0,
+                                            0.0, 0.5, 0.0, 0.0,
+                                            0.0, 0.0, 0.5, 0.0,
+                                            0.5, 0.5, 0.5, 1.0 };
+            glm::mat4 biased_depth_mvp = bias * depth_mvp;
 
-            rmw::context.draw(rs, m_shader, m_va);
+            for (const Model& model : m_models) {
+                m_shader->set_uniform("normal_mtx", glm::transpose(glm::inverse(glm::mat3(model.transform))));
+                m_shader->set_uniform("depth_mvp", biased_depth_mvp * model.transform);
+                m_shader->set_uniform("mvp", mvp * model.transform);
+                rmw::context.draw(rs, m_shader, model.va);
+            }
         }
 
 
@@ -207,6 +241,47 @@ public:
             rmw::context.draw(rs, shader, va);
         }
 
+
+
+        // debug render light frustum
+        {
+            renderer3D.set_transformation(mvp);
+
+            renderer3D.set_color(255, 0, 0);
+            renderer3D.set_point_size(5);
+            renderer3D.point(light_pos);
+
+            glm::mat4 inv_depth = glm::inverse(depth_mvp);
+            glm::vec3 corners[8];
+            int i = 0;
+            for (int x : {-1, 1})
+            for (int y : {-1, 1})
+            for (int z : {-1, 1}) {
+                glm::vec4 p = inv_depth * glm::vec4(x, y, z, 1);
+                corners[i++] = glm::vec3(p) / p.w;
+            }
+
+            renderer3D.line(corners[0], corners[1]);
+            renderer3D.line(corners[0], corners[2]);
+            renderer3D.line(corners[1], corners[3]);
+            renderer3D.line(corners[2], corners[3]);
+
+            renderer3D.line(corners[4], corners[5]);
+            renderer3D.line(corners[4], corners[6]);
+            renderer3D.line(corners[5], corners[7]);
+            renderer3D.line(corners[6], corners[7]);
+
+            renderer3D.line(corners[0], corners[4]);
+            renderer3D.line(corners[1], corners[5]);
+            renderer3D.line(corners[2], corners[6]);
+            renderer3D.line(corners[3], corners[7]);
+
+            renderer3D.line(corners[0], corners[6]);
+            renderer3D.line(corners[2], corners[4]);
+
+            renderer3D.flush();
+        }
+
         rmw::context.flip_buffers();
         return true;
     }
@@ -214,14 +289,11 @@ private:
     rmw::Shader::Ptr       m_depth_shader;
     rmw::Shader::Ptr       m_shader;
 
-    rmw::VertexBuffer::Ptr m_vb;
-    rmw::IndexBuffer::Ptr  m_ib;
-    rmw::VertexArray::Ptr  m_va;
-
     rmw::Framebuffer::Ptr  m_framebuffer;
     rmw::Texture2D::Ptr    m_depth_map;
 
     Eye                    m_eye;
+    std::vector<Model>     m_models;
 };
 
 

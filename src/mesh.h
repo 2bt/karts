@@ -4,14 +4,15 @@
 #include <glm/glm.hpp>
 
 
-class Model {
-public:
+struct Mesh {
+
     bool load(const char* name);
+
     struct Vertex {
         glm::vec3 p;
         glm::vec3 n;
     };
-    // private:
-    std::vector<Vertex> m_vertices;
-    std::vector<int>    m_indices;
+
+    std::vector<Vertex> vertices;
+    std::vector<int>    indices;
 };

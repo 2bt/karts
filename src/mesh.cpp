@@ -1,5 +1,5 @@
 // vim: et ts=4 sts=4 sw=4
-#include "model.h"
+#include "mesh.h"
 #include "log.h"
 #include <cstdio>
 #include <cstring>
@@ -7,7 +7,7 @@
 #include <map>
 
 
-bool Model::load(const char* name) {
+bool Mesh::load(const char* name) {
     FILE* f = fopen(name, "r");
     if (!f) return false;
 
@@ -40,12 +40,12 @@ bool Model::load(const char* name) {
                 if (q) std::get<2>(t) = atoi(q) - 1;
                 auto it = lookup.find(t);
                 if (it == lookup.end()) {
-                    lookup[t] = m_vertices.size();
-                    m_vertices.push_back(Vertex{ pos[std::get<0>(t)],
+                    lookup[t] = vertices.size();
+                    vertices.push_back(Vertex{ pos[std::get<0>(t)],
                                                  norm[std::get<2>(t)]}); }
-                m_indices.emplace_back(lookup[t]);
+                indices.emplace_back(lookup[t]);
             }
-            if (*next() != '\0') LOG("model '%s' is not triangulated", name);
+            if (*next() != '\0') LOG("mesh '%s' is not triangulated", name);
         }
         else LOG("skipping command \"%s\"", cmd);
     }
