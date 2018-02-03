@@ -44,24 +44,43 @@ public:
         // renderer2D.init();
         // renderer3D.init();
 
+        m_depth_shader = rmw::context.create_shader(R"(#version 100
+        attribute vec3 a_pos;
+        uniform mat4 depth_mvp;
+        void main() {
+            gl_Position = depth_mvp * vec4(a_pos, 1.0);
+        })",
+        R"(#version 100
+        void main() {
+        })");
+
         m_shader = rmw::context.create_shader(R"(#version 100
         attribute vec3 a_pos;
         attribute vec3 a_norm;
         uniform mat4 mvp;
-        varying float v_depth;
+        uniform mat4 depth_mvp;
+        varying vec4 v_shadow_coord;
         varying vec3 v_norm;
+        varying float v_depth;
         void main() {
             gl_Position = mvp * vec4(a_pos, 1.0);
-            v_depth = gl_Position.z;
+            v_shadow_coord = depth_mvp * vec4(a_pos, 1.0);
             v_norm = a_norm;
+            v_depth = gl_Position.z;
         })",
         R"(#version 100
         precision mediump float;
-        varying float v_depth;
+        uniform sampler2D depth_map;
+        varying vec4 v_shadow_coord;
         varying vec3 v_norm;
+        varying float v_depth;
         void main() {
+            float v = 1.0;
+            if (texture2D(depth_map, v_shadow_coord.xy).r < v_shadow_coord.z) {
+                v = 0.5;
+            }
             vec3 col = normalize(v_norm) * 0.5 + vec3(0.5, 0.5, 0.5);
-            gl_FragColor = vec4(col * pow(0.8, v_depth), 1.0);
+            gl_FragColor = vec4(col * pow(0.85, v_depth), 1.0) * v;
         })");
 
         m_vb = rmw::context.create_vertex_buffer(rmw::BufferHint::StreamDraw);
@@ -80,14 +99,18 @@ public:
         m_ib->init_data(model.m_indices);
         m_va->set_count(model.m_indices.size());
 
-        rmw::Framebuffer::Ptr framebuffer;
-        rmw::Texture2D::Ptr depth_tex;
 
-        framebuffer = rmw::context.create_framebuffer();
-        depth_tex = rmw::context.create_texture_2D(rmw::TextureFormat::Depth, 512, 512);
+        m_depth_map = rmw::context.create_texture_2D(rmw::TextureFormat::Depth, 1024, 1024);
+        m_framebuffer = rmw::context.create_framebuffer();
 
-        framebuffer->attach_color(nullptr);
-        framebuffer->attach_depth(depth_tex);
+        #ifdef __EMSCRIPTEN__
+        // the frame buffer is unhappy without color attachment :(
+        static auto foobar = rmw::context.create_texture_2D(rmw::TextureFormat::RGB, 1024, 1024);
+        m_framebuffer->attach_color(foobar);
+        #endif
+
+        m_framebuffer->attach_depth(m_depth_map);
+        if (!m_framebuffer->is_complete()) LOG("framebuffer incomplete");
      }
 
     bool loop() {
@@ -109,27 +132,88 @@ public:
         // update
         m_eye.update();
 
-        // render
-        rmw::context.clear(rmw::ClearState { { 0, 0, 0, 1 } });
 
+        // render
         rmw::RenderState rs;
         rs.depth_test_enabled = true;
 
-        glm::mat4 mat_perspective = glm::perspective(glm::radians(60.0f),
-                rmw::context.get_aspect_ratio(), 0.1f, 500.0f);
-        m_shader->set_uniform("mvp", mat_perspective * m_eye.get_view_mtx());
+        // render depth map
+        glm::mat4 depth_mvp;
+        {
+            rmw::context.clear(rmw::ClearState { { 0, 0, 0, 1 } }, m_framebuffer);
 
-        rmw::context.draw(rs, m_shader, m_va);
+            glm::mat4 projection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, 0.0f, 20.0f);
+            glm::mat4 view = glm::lookAt(glm::vec3(-1, 10, 8),
+                                         glm::vec3(0, 0, 0),
+                                         glm::vec3(0, 1, 0));
+
+            depth_mvp = projection * view; // * model
+            m_depth_shader->set_uniform("depth_mvp", depth_mvp);
+
+            rmw::context.draw(rs, m_depth_shader, m_va, m_framebuffer);
+        }
+
+        // render scene with shadow
+        {
+            rmw::context.clear(rmw::ClearState { { 0.1, 0.15, 0.25, 1 } });
+
+            glm::mat4 projection = glm::perspective(glm::radians(60.0f),
+                    rmw::context.get_aspect_ratio(), 0.1f, 100.0f);
+            m_shader->set_uniform("mvp", projection * m_eye.get_view_mtx());
+
+            glm::mat4 bias(0.5, 0.0, 0.0, 0.0,
+                           0.0, 0.5, 0.0, 0.0,
+                           0.0, 0.0, 0.5, 0.0,
+                           0.5, 0.5, 0.5, 1.0);
+            m_shader->set_uniform("depth_mvp", bias * depth_mvp);
+            m_shader->set_uniform("depth_map", m_depth_map);
+
+            rmw::context.draw(rs, m_shader, m_va);
+        }
+
+
+        // debug render depth map
+        if (0)
+        {
+            auto vb = rmw::context.create_vertex_buffer(rmw::BufferHint::StreamDraw);
+            std::vector<int8_t> data = { 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, };
+            vb->init_data(data);
+            auto va = rmw::context.create_vertex_array();
+            va->set_primitive_type(rmw::PrimitiveType::Triangles);
+            va->set_count(6);
+            va->set_attribute(0, vb, rmw::ComponentType::Int8, 2, false, 0, 2);
+            auto shader = rmw::context.create_shader(R"(#version 100
+            attribute vec2 a_pos;
+            varying vec2 v_uv;
+            void main() {
+                gl_Position = vec4((a_pos - vec2(0.5)) * 1.0, 0, 1.0);
+                v_uv = a_pos;
+            })",
+            R"(#version 100
+            precision mediump float;
+            varying vec2 v_uv;
+            uniform sampler2D tex;
+            void main() {
+                gl_FragColor = vec4(texture2D(tex, v_uv).rrr, 1.0);
+            })");
+            rs.depth_test_enabled = false;
+            shader->set_uniform("tex", m_depth_map);
+            rmw::context.draw(rs, shader, va);
+        }
 
         rmw::context.flip_buffers();
         return true;
     }
 private:
+    rmw::Shader::Ptr       m_depth_shader;
     rmw::Shader::Ptr       m_shader;
 
     rmw::VertexBuffer::Ptr m_vb;
     rmw::IndexBuffer::Ptr  m_ib;
     rmw::VertexArray::Ptr  m_va;
+
+    rmw::Framebuffer::Ptr  m_framebuffer;
+    rmw::Texture2D::Ptr    m_depth_map;
 
     Eye                    m_eye;
 };

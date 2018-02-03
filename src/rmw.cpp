@@ -278,11 +278,11 @@ bool Texture2D::init(const char* filename, FilterMode filter) {
     return true;
 }
 bool Texture2D::init(SDL_Surface* s, FilterMode filter) {
-    return init(
-         (s->format->BytesPerPixel == 4) ? TextureFormat::RGBA : TextureFormat::RGB,
-         s->w, s->h, s->pixels, filter);
+    return init(s->format->BytesPerPixel == 4 ? TextureFormat::RGBA : TextureFormat::RGB,
+                s->w, s->h, s->pixels, filter);
 }
 bool Texture2D::init(TextureFormat format, int w, int h, void* data, FilterMode filter) {
+    printf("error %d\n", glGetError());
     m_width  = w;
     m_height = h;
     m_format = format;
@@ -302,7 +302,18 @@ bool Texture2D::init(TextureFormat format, int w, int h, void* data, FilterMode 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, map_to_gl(m_format), m_width, m_height, 0, map_to_gl(m_format), GL_UNSIGNED_BYTE, data);
+    // XXX: the browser is very finicky. this is the result of trial and error.
+    if (m_format == TextureFormat::Depth) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT16,
+                     m_width, m_height, 0, map_to_gl(m_format),
+                     GL_UNSIGNED_INT, data);
+    }
+    else {
+        glTexImage2D(GL_TEXTURE_2D, 0, map_to_gl(m_format),
+                     m_width, m_height, 0, map_to_gl(m_format),
+                     GL_UNSIGNED_BYTE, data);
+    }
+    printf("glTexImage2D %d (%d)\n", glGetError(), format);
 
     if (filter == FilterMode::Trilinear) {
         glGenerateMipmap(GL_TEXTURE_2D);
@@ -323,27 +334,30 @@ Framebuffer::~Framebuffer() {
     if (m_handle) glDeleteFramebuffers(1, &m_handle);
 }
 void Framebuffer::attach_color(const Texture2D::Ptr& t) {
+    if (t) {
+        m_width  = t->m_width;
+        m_height = t->m_height;
+    }
     gl.bind_framebuffer(m_handle);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-            GL_TEXTURE_2D, t ? t->m_handle : 0, 0);
-    if (t) {
-        // glDrawBuffer(GL_NONE);
-        m_width  = t->m_width;
-        m_height = t->m_height;
-    }
+                           GL_TEXTURE_2D, t ? t->m_handle : 0, 0);
+    // TODO: is this correct?
+    //glDrawBuffer(t ? GL_COLOR_ATTACHMENT0 : GL_NONE);
 }
 void Framebuffer::attach_depth(const Texture2D::Ptr& t) {
-    gl.bind_framebuffer(m_handle);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-            GL_TEXTURE_2D, t ? t->m_handle : 0, 0);
     if (t) {
-        // TODO: is this correct?
-        // glDrawBuffer(GL_COLOR_ATTACHMENT0);
         m_width  = t->m_width;
         m_height = t->m_height;
     }
+    gl.bind_framebuffer(m_handle);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                           GL_TEXTURE_2D, t ? t->m_handle : 0, 0);
 }
-
+bool Framebuffer::is_complete() const {
+    gl.bind_framebuffer(m_handle);
+    printf("glCheckFramebufferStatus %d\n", glCheckFramebufferStatus(GL_FRAMEBUFFER));
+    return glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+}
 
 // context
 
@@ -364,7 +378,7 @@ bool Context::init(int width, int height, const char* title) {
     m_window = SDL_CreateWindow(title,
             SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
             width, height,
-            SDL_WINDOW_OPENGL /*| SDL_WINDOW_RESIZABLE*/);
+            SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
 
     m_gl_context = SDL_GL_CreateContext(m_window);
     if (!m_gl_context) return false;
@@ -374,9 +388,7 @@ bool Context::init(int width, int height, const char* title) {
     glewExperimental = true;
     glewInit();
 
-
     glEnable(GL_PROGRAM_POINT_SIZE);
-
 
     // initialize the reder state according to opengl's initial state
     m_render_state.cull_face_enabled = false;
@@ -454,32 +466,31 @@ void Context::sync_render_state(const RenderState& rs) {
         if ( m_render_state.blend_func_src_rgb != rs.blend_func_src_rgb
         || m_render_state.blend_func_src_alpha != rs.blend_func_src_alpha
         || m_render_state.blend_func_dst_rgb != rs.blend_func_dst_rgb
-        || m_render_state.blend_func_dst_alpha != rs.blend_func_dst_alpha) {
-            m_render_state.blend_func_src_rgb    = rs.blend_func_src_rgb;
-            m_render_state.blend_func_src_alpha    = rs.blend_func_src_alpha;
-            m_render_state.blend_func_dst_rgb    = rs.blend_func_dst_rgb;
-            m_render_state.blend_func_dst_alpha    = rs.blend_func_dst_alpha;
-            glBlendFuncSeparate(
-                    map_to_gl(m_render_state.blend_func_src_rgb),
-                    map_to_gl(m_render_state.blend_func_dst_rgb),
-                    map_to_gl(m_render_state.blend_func_src_alpha),
-                    map_to_gl(m_render_state.blend_func_dst_alpha));
+        || m_render_state.blend_func_dst_alpha != rs.blend_func_dst_alpha)
+        {
+            m_render_state.blend_func_src_rgb   = rs.blend_func_src_rgb;
+            m_render_state.blend_func_src_alpha = rs.blend_func_src_alpha;
+            m_render_state.blend_func_dst_rgb   = rs.blend_func_dst_rgb;
+            m_render_state.blend_func_dst_alpha = rs.blend_func_dst_alpha;
+            glBlendFuncSeparate(map_to_gl(m_render_state.blend_func_src_rgb),
+                                map_to_gl(m_render_state.blend_func_dst_rgb),
+                                map_to_gl(m_render_state.blend_func_src_alpha),
+                                map_to_gl(m_render_state.blend_func_dst_alpha));
         }
         if (m_render_state.blend_equation_rgb != rs.blend_equation_rgb
-        || m_render_state.blend_equation_alpha != rs.blend_equation_alpha) {
+        || m_render_state.blend_equation_alpha != rs.blend_equation_alpha)
+        {
             m_render_state.blend_equation_rgb = rs.blend_equation_rgb;
             m_render_state.blend_equation_alpha = rs.blend_equation_alpha;
-            glBlendEquationSeparate(
-                    map_to_gl(m_render_state.blend_equation_rgb),
-                    map_to_gl(m_render_state.blend_equation_alpha));
+            glBlendEquationSeparate(map_to_gl(m_render_state.blend_equation_rgb),
+                                    map_to_gl(m_render_state.blend_equation_alpha));
         }
         if (m_render_state.blend_color != rs.blend_color) {
             m_render_state.blend_color = rs.blend_color;
-            glBlendColor(
-                    m_render_state.blend_color.r,
-                    m_render_state.blend_color.g,
-                    m_render_state.blend_color.b,
-                    m_render_state.blend_color.a);
+            glBlendColor(m_render_state.blend_color.r,
+                         m_render_state.blend_color.g,
+                         m_render_state.blend_color.b,
+                         m_render_state.blend_color.a);
         }
     }
 }

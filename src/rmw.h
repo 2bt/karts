@@ -218,6 +218,7 @@ public:
 
     void attach_color(const Texture2D::Ptr& t);
     void attach_depth(const Texture2D::Ptr& t);
+    bool is_complete() const;
 
 private:
     Framebuffer(const Framebuffer&) = delete;
