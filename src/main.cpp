@@ -123,7 +123,7 @@ public:
 
 
         // init framebuffer
-        m_depth_map = rmw::context.create_texture_2D(rmw::TextureFormat::Depth, 2 * 1024, 2 * 1024);
+        m_depth_map = rmw::context.create_texture_2D(rmw::TextureFormat::Depth, 1024, 1024);
         m_framebuffer = rmw::context.create_framebuffer();
 #ifdef __EMSCRIPTEN__
         // XXX: the webgl framebuffer is unhappy without color attachment :(
