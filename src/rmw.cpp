@@ -216,20 +216,20 @@ bool Shader::init(const char* vs, const char* fs) {
         uint32_t type;
         glGetActiveUniform(m_program, i, sizeof(name), nullptr, &size, &type, name);
         int location = glGetUniformLocation(m_program, name);
-        Uniform::Ptr u;
+        m_uniforms.emplace_back(name, type, location);
+        Uniform& u = m_uniforms.back();
         switch (type) {
-        case GL_FLOAT:      u = std::make_unique<UniformExtend<float>>(name, type, location); break;
-        case GL_FLOAT_VEC2: u = std::make_unique<UniformExtend<glm::vec2>>(name, type, location); break;
-        case GL_FLOAT_VEC3: u = std::make_unique<UniformExtend<glm::vec3>>(name, type, location); break;
-        case GL_FLOAT_VEC4: u = std::make_unique<UniformExtend<glm::vec4>>(name, type, location); break;
-        case GL_FLOAT_MAT3: u = std::make_unique<UniformExtend<glm::mat3>>(name, type, location); break;
-        case GL_FLOAT_MAT4: u = std::make_unique<UniformExtend<glm::mat4>>(name, type, location); break;
-        case GL_SAMPLER_2D: u = std::make_unique<UniformExtend<Texture2D::Ptr>>(name, type, location); break;
+        case GL_FLOAT:      u.extent = Uniform::Extent<float>(); break;
+        case GL_FLOAT_VEC2: u.extent = Uniform::Extent<glm::vec2>(); break;
+        case GL_FLOAT_VEC3: u.extent = Uniform::Extent<glm::vec3>(); break;
+        case GL_FLOAT_VEC4: u.extent = Uniform::Extent<glm::vec4>(); break;
+        case GL_FLOAT_MAT3: u.extent = Uniform::Extent<glm::mat3>(); break;
+        case GL_FLOAT_MAT4: u.extent = Uniform::Extent<glm::mat4>(); break;
+        case GL_SAMPLER_2D: u.extent = Uniform::ExtentTexture2D(); break;
         default:
             fprintf(stderr, "Error: uniform '%s' has unknown type (%d)\n", name, type);
             assert(false);
         }
-        m_uniforms.push_back(std::move(u));
     }
 
     return true;
@@ -247,19 +247,20 @@ void gl_uniform(int l, const glm::mat3& v) { glUniformMatrix3fv(l, 1, false, &v[
 void gl_uniform(int l, const glm::mat4& v) { glUniformMatrix4fv(l, 1, false, &v[0].x); }
 
 
-template <class T>
-void Shader::UniformExtend<T>::update() const {
-    if (!dirty) return;
-    dirty = false;
-    gl_uniform(location, value);
-}
-void Shader::UniformExtend<Texture2D::Ptr>::update() const {
-    // FIXME: this is hacky
-    // but what's the best way to select the unit?
-    // some kind of LRU policy?
-    int unit = location;
-    gl.bind_texture(unit, GL_TEXTURE_2D, handle);
-    glUniform1i(location, unit);
+void Shader::Uniform::update() const {
+    std::visit([this](auto& e) {
+        using T = std::decay_t<decltype(e)>;
+        if constexpr (std::is_same_v<T, ExtentTexture2D>) {
+            int unit = location;
+            gl.bind_texture(unit, GL_TEXTURE_2D, e.handle);
+            glUniform1i(location, unit);
+        }
+        else {
+            if (!e.dirty) return;
+            e.dirty = false;
+            gl_uniform(location, e.value);
+        }
+    }, extent);
 }
 
 

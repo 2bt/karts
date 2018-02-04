@@ -7,6 +7,7 @@
 #include <array>
 #include <vector>
 #include <string>
+#include <variant>
 
 
 namespace rmw {
@@ -236,10 +237,8 @@ public:
     template<class T>
     void set_uniform(const std::string& name, const T& value) {
         for (auto& u : m_uniforms) {
-            if (u->name == name) {
-                auto* ue = dynamic_cast<UniformExtend<T>*>(u.get());
-                assert(ue);
-                ue->set(value);
+            if (u.name == name) {
+                u.set(value);
                 return;
             }
         }
@@ -261,47 +260,59 @@ private:
     };
 
     struct Uniform {
-        typedef std::unique_ptr<Uniform> Ptr;
+        Uniform(const std::string& name, uint32_t type, int location)
+            : name(name), type(type), location(location) {}
+
+        void update() const;
+
+        template<class T>
+        struct Extent {
+            Extent() : dirty(true) {}
+            mutable bool dirty;
+            T            value;
+        };
+        struct ExtentTexture2D {
+            uint32_t handle;
+        };
+
+        template<class T>
+        void set(const T& value) {
+            if constexpr (std::is_same<T, Texture2D::Ptr>::value) {
+                ExtentTexture2D& e = std::get<ExtentTexture2D>(extent);
+                e.handle = value->m_handle;
+            }
+            else {
+                Extent<T>& e = std::get<Extent<T>>(extent);
+                if (e.value != value) {
+                    e.value = value;
+                    e.dirty = true;
+                }
+            }
+        }
+
         std::string name;
         uint32_t    type;
         int         location;
-        Uniform(const std::string& name, uint32_t type, int location)
-            : name(name), type(type), location(location) {}
-        virtual ~Uniform() {}
-        virtual void update() const = 0;
-    };
-
-    template <class T>
-    struct UniformExtend : Uniform {
-        UniformExtend(const std::string& name, uint32_t type, int location) : Uniform(name, type, location) {}
-        void update() const override;
-        void set(const T& v) {
-            if (value != v) {
-                value = v;
-                dirty = true;
-            }
-        }
-        mutable bool dirty { true };
-        T            value { 0 };
+        std::variant<
+            Extent<float>,
+            Extent<glm::vec2>,
+            Extent<glm::vec3>,
+            Extent<glm::vec4>,
+            Extent<glm::mat3>,
+            Extent<glm::mat4>,
+            ExtentTexture2D
+        > extent;
     };
 
     void update_uniforms() const {
-        for (auto& u : m_uniforms) u->update();
+        for (auto& u : m_uniforms) u.update();
     }
 
-    uint32_t                  m_program = 0;
-    std::vector<Attribute>    m_attributes;
-    std::vector<Uniform::Ptr> m_uniforms;
+    uint32_t               m_program = 0;
+    std::vector<Attribute> m_attributes;
+    std::vector<Uniform>   m_uniforms;
 };
 
-
-template <>
-struct Shader::UniformExtend<Texture2D::Ptr> : Uniform {
-    UniformExtend(const std::string& name, uint32_t type, int location) : Uniform(name, type, location) {}
-    void update() const override;
-    void set(const Texture2D::Ptr& texture) { handle = texture->m_handle; }
-    uint32_t handle;
-};
 
 
 class Context {
