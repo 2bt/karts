@@ -239,27 +239,12 @@ public:
             if (u->name == name) {
                 auto* ue = dynamic_cast<UniformExtend<T>*>(u.get());
                 assert(ue);
-                if (ue->value != value) {
-                    ue->value = value;
-                    ue->dirty = true;
-                }
+                ue->set(value);
                 return;
             }
         }
         assert(false);
     }
-    void set_uniform(const std::string& name, const Texture2D::Ptr& texture) {
-        for (auto& u : m_uniforms) {
-            if (u->name == name) {
-                auto* ue = dynamic_cast<UniformTexture2D*>(u.get());
-                assert(ue);
-                ue->set(texture);
-                return;
-            }
-        }
-        assert(false);
-    }
-
 
     ~Shader();
 private:
@@ -286,17 +271,16 @@ private:
         virtual void update() const = 0;
     };
 
-    struct UniformTexture2D : Uniform {
-        UniformTexture2D(const std::string& name, uint32_t type, int location) : Uniform(name, type, location) {}
-        void update() const override;
-        void set(const Texture2D::Ptr& texture) { handle = texture->m_handle; }
-        uint32_t handle;
-    };
-
     template <class T>
     struct UniformExtend : Uniform {
         UniformExtend(const std::string& name, uint32_t type, int location) : Uniform(name, type, location) {}
         void update() const override;
+        void set(const T& v) {
+            if (value != v) {
+                value = v;
+                dirty = true;
+            }
+        }
         mutable bool dirty { true };
         T            value { 0 };
     };
@@ -310,6 +294,14 @@ private:
     std::vector<Uniform::Ptr> m_uniforms;
 };
 
+
+template <>
+struct Shader::UniformExtend<Texture2D::Ptr> : Uniform {
+    UniformExtend(const std::string& name, uint32_t type, int location) : Uniform(name, type, location) {}
+    void update() const override;
+    void set(const Texture2D::Ptr& texture) { handle = texture->m_handle; }
+    uint32_t handle;
+};
 
 
 class Context {

@@ -224,8 +224,7 @@ bool Shader::init(const char* vs, const char* fs) {
         case GL_FLOAT_VEC4: u = std::make_unique<UniformExtend<glm::vec4>>(name, type, location); break;
         case GL_FLOAT_MAT3: u = std::make_unique<UniformExtend<glm::mat3>>(name, type, location); break;
         case GL_FLOAT_MAT4: u = std::make_unique<UniformExtend<glm::mat4>>(name, type, location); break;
-        case GL_SAMPLER_2D: u = std::make_unique<UniformTexture2D>(name, type, location); break;
-
+        case GL_SAMPLER_2D: u = std::make_unique<UniformExtend<Texture2D::Ptr>>(name, type, location); break;
         default:
             fprintf(stderr, "Error: uniform '%s' has unknown type (%d)\n", name, type);
             assert(false);
@@ -254,7 +253,7 @@ void Shader::UniformExtend<T>::update() const {
     dirty = false;
     gl_uniform(location, value);
 }
-void Shader::UniformTexture2D::update() const {
+void Shader::UniformExtend<Texture2D::Ptr>::update() const {
     // FIXME: this is hacky
     // but what's the best way to select the unit?
     // some kind of LRU policy?

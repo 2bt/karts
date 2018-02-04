@@ -1,5 +1,5 @@
-CF = -Wall --std=c++14 -O2
-LF = -Wall --std=c++14 -lSDL2 -lSDL2_image -lGLEW -lGL
+CF = -std=c++17 -Wall -O2
+LF = -Wall -lSDL2 -lSDL2_image -lGLEW -lGL
 
 CXX = g++
 SRC = $(wildcard src/*.cpp)
