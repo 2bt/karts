@@ -6,8 +6,9 @@
 class Eye {
 public:
     Eye();
-    void        update();
-    glm::mat4x4 get_view_mtx() const;
+    void              update();
+    glm::mat4x4       get_view_mat() const;
+    const glm::vec3 & get_pos() const { return m_pos; }
 private:
     float       m_ang_x;
     float       m_ang_y;

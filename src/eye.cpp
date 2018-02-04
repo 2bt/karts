@@ -6,10 +6,11 @@
 #include <SDL2/SDL.h>
 
 
+
 Eye::Eye() {
-    m_ang_x = 0.18;
-    m_ang_y = -0.78;
-    m_pos = { 2.27, 1.48, 1.82 };
+    m_ang_x = 0.75;
+    m_ang_y = -0.69;
+    m_pos = { 2.896143, 4.247687, 3.40952 };
 }
 
 
@@ -41,7 +42,7 @@ void Eye::update() {
 }
 
 
-glm::mat4x4 Eye::get_view_mtx() const {
+glm::mat4x4 Eye::get_view_mat() const {
     return glm::rotate<float>(m_ang_x, glm::vec3(1, 0, 0)) *
            glm::rotate<float>(m_ang_y, glm::vec3(0, 1, 0)) *
            glm::translate(-m_pos);

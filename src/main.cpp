@@ -49,9 +49,9 @@ public:
 
         m_depth_shader = rmw::context.create_shader(R"(#version 100
         attribute vec3 a_pos;
-        uniform mat4 depth_mvp;
+        uniform mat4 depth_vp_mat;
         void main() {
-            gl_Position = depth_mvp * vec4(a_pos, 1.0);
+            gl_Position = depth_vp_mat * vec4(a_pos, 1.0);
         })",
         R"(#version 100
         void main() {
@@ -60,41 +60,49 @@ public:
         m_shader = rmw::context.create_shader(R"(#version 100
         attribute vec3 a_pos;
         attribute vec3 a_norm;
-        uniform mat4 mvp;
-        uniform mat4 depth_mvp;
-        uniform mat3 normal_mtx;
+        uniform mat4 mvp_mat;
+        uniform mat4 model_mat;
+        uniform mat4 biased_depth_mvp_mat;
+        uniform mat3 normal_mat;
+        varying vec3 v_frag_pos;
         varying vec4 v_shadow_coord;
         varying vec3 v_norm;
         varying float v_depth;
         void main() {
-            gl_Position = mvp * vec4(a_pos, 1.0);
-            v_shadow_coord = depth_mvp * vec4(a_pos, 1.0);
-            v_norm = normalize(normal_mtx * a_norm);
+            v_frag_pos = vec3(model_mat * vec4(a_pos, 1.0));
+            gl_Position = mvp_mat * vec4(a_pos, 1.0);
+            v_shadow_coord = biased_depth_mvp_mat * vec4(a_pos, 1.0);
+            v_norm = normalize(normal_mat * a_norm);
             v_depth = gl_Position.z;
         })",
         R"(#version 100
         precision mediump float;
         uniform sampler2D depth_map;
         uniform vec3 light_dir;
+        uniform vec3 view_pos;
         uniform vec3 color;
+        varying vec3 v_frag_pos;
         varying vec4 v_shadow_coord;
         varying vec3 v_norm;
         varying float v_depth;
         void main() {
-            float v = 1.0;
 
+            float v = 1.0;
             for (int x = -1; x <= 1; ++x)
             for (int y = -1; y <= 1; ++y) {
-                v -= (1.0 / 9.0) * step(texture2D(depth_map, v_shadow_coord.xy + vec2(x, y) / 1024.0).r,
+                v -= (1.0 / 9.0) * step(texture2D(depth_map, v_shadow_coord.xy + vec2(x, y) / 512.0).r,
                                         v_shadow_coord.z + 0.001);
             }
 
-            // vec3 col = normalize(v_norm) * 0.5 + vec3(0.5, 0.5, 0.5);
+            vec3 ambient  = 0.15 * color;
+            vec3 diffuse  = 0.85 * color * min(v, max(0.0, dot(v_norm, -light_dir)));
 
-            vec3 ambient = 0.1 * color;
-            vec3 diffuse = 0.9 * color * min(v, max(0.0, dot(v_norm, -light_dir)));
+            float shininess = 400.0;
+            vec3 halfway = normalize(-light_dir + normalize(view_pos - v_frag_pos));
+            vec3 specular = 0.4 * vec3(1.0, 1.0, 1.0) * pow(max(dot(v_norm, halfway), 0.0), shininess) * v;
 
-            gl_FragColor = vec4(ambient + diffuse * pow(0.85, v_depth), 1.0);
+            vec3 fog = vec3(0.1, 0.15, 0.25);
+            gl_FragColor = vec4(mix(fog, ambient + diffuse + specular, pow(0.95, v_depth)), 1.0);
         })");
 
 
@@ -123,7 +131,7 @@ public:
 
 
         // init framebuffer
-        m_depth_map = rmw::context.create_texture_2D(rmw::TextureFormat::Depth, 1024, 1024);
+        m_depth_map = rmw::context.create_texture_2D(rmw::TextureFormat::Depth, 512, 512);
         m_framebuffer = rmw::context.create_framebuffer();
 #ifdef __EMSCRIPTEN__
         // XXX: the webgl framebuffer is unhappy without color attachment :(
@@ -168,9 +176,9 @@ public:
                                 glm::rotate<float>(t, glm::vec3(1, 0, 0)) *
                                 glm::translate(glm::vec3(0, -1, 0));
 
-        glm::mat4 depth_mvp;
+        glm::mat4 depth_vp_mat;
         glm::vec3 light_lookat = { 0, 0, 0 };
-        glm::vec3 light_pos = glm::vec3(3, 10, cosf(t * 0.5) * 8);
+        glm::vec3 light_pos = glm::vec3(-3, 10, -8);
 
         // render depth map
         {
@@ -178,41 +186,43 @@ public:
 
 
             glm::mat4 view = glm::lookAt(light_pos, light_lookat, glm::vec3(0, 1, 0));
-            glm::mat4 projection = glm::ortho(-7.0f, 7.0f, -7.0f, 7.0f, 0.0f, 20.0f);
-            depth_mvp = projection * view;
+            glm::mat4 proj = glm::ortho(-7.0f, 7.0f, -7.0f, 7.0f, 0.0f, 20.0f);
+            depth_vp_mat = proj * view;
 
 
             rs.cull_face = rmw::CullFace::Front;
             for (const Model& model : m_models) {
-                m_depth_shader->set_uniform("depth_mvp", depth_mvp * model.transform);
+                m_depth_shader->set_uniform("depth_vp_mat", depth_vp_mat * model.transform);
                 rmw::context.draw(rs, m_depth_shader, model.va, m_framebuffer);
             }
             rs.cull_face = rmw::CullFace::Back;
         }
 
         // render scene with shadow
-        glm::mat4 mvp;
+        glm::mat4 vp_mat;
         {
             rmw::context.clear({ 0.1, 0.15, 0.25, 1 });
 
             m_shader->set_uniform("depth_map", m_depth_map);
 
-            glm::mat4 projection = glm::perspective(glm::radians(60.0f),
+            glm::mat4 proj = glm::perspective(glm::radians(60.0f),
                     rmw::context.get_aspect_ratio(), 0.1f, 100.0f);
 
-            mvp = projection * m_eye.get_view_mtx();
+            vp_mat = proj * m_eye.get_view_mat();
 
             static const glm::mat4 bias = { 0.5, 0.0, 0.0, 0.0,
                                             0.0, 0.5, 0.0, 0.0,
                                             0.0, 0.0, 0.5, 0.0,
                                             0.5, 0.5, 0.5, 1.0 };
-            glm::mat4 biased_depth_mvp = bias * depth_mvp;
+            glm::mat4 biased_depth_vp_mat = bias * depth_vp_mat;
 
+            m_shader->set_uniform("light_dir", glm::normalize(light_lookat - light_pos));
+            m_shader->set_uniform("view_pos", m_eye.get_pos());
             for (const Model& model : m_models) {
-                m_shader->set_uniform("light_dir", glm::normalize(light_lookat - light_pos));
-                m_shader->set_uniform("normal_mtx", glm::transpose(glm::inverse(glm::mat3(model.transform))));
-                m_shader->set_uniform("depth_mvp", biased_depth_mvp * model.transform);
-                m_shader->set_uniform("mvp", mvp * model.transform);
+                m_shader->set_uniform("normal_mat", glm::transpose(glm::inverse(glm::mat3(model.transform))));
+                m_shader->set_uniform("biased_depth_mvp_mat", biased_depth_vp_mat * model.transform);
+                m_shader->set_uniform("model_mat", model.transform);
+                m_shader->set_uniform("mvp_mat", vp_mat * model.transform);
                 m_shader->set_uniform("color", model.color);
                 rmw::context.draw(rs, m_shader, model.va);
             }
@@ -252,13 +262,13 @@ public:
 
         // debug render light frustum
         {
-            renderer3D.set_transformation(mvp);
+            renderer3D.set_transformation(vp_mat);
 
             renderer3D.set_color(255, 0, 0);
             renderer3D.set_point_size(5);
             renderer3D.point(light_pos);
 
-            glm::mat4 inv_depth = glm::inverse(depth_mvp);
+            glm::mat4 inv_depth = glm::inverse(depth_vp_mat);
             glm::vec3 corners[8];
             int i = 0;
             for (int x : {-1, 1})
