@@ -27,20 +27,17 @@ struct Model {
 };
 
 
-struct Light {
-    glm::mat4             mvp;
-    glm::vec4             pos;
-    glm::vec3             color;
-
-    rmw::Framebuffer::Ptr framebuffer;
-    rmw::Texture2D::Ptr   depth_map;
-
-    // only for spot lights
-    glm::vec3             dir;
-    float                 cosphi;
-    // float                 attenuation;
-};
-
+//struct Light {
+//    glm::mat4             mvp;
+//    glm::vec4             pos;
+//    glm::vec3             color;
+//    rmw::Framebuffer::Ptr framebuffer;
+//    rmw::Texture2D::Ptr   depth_map;
+//    // only for spot lights
+//    glm::vec3             dir;
+//    float                 cosphi;
+//    float                 attenuation;
+//};
 
 
 
@@ -78,16 +75,26 @@ public:
         R"(#version 100
         precision mediump float;
         uniform sampler2D depth_map;
+        uniform vec3 light_dir;
+        uniform vec3 color;
         varying vec4 v_shadow_coord;
         varying vec3 v_norm;
         varying float v_depth;
         void main() {
             float v = 1.0;
-            if (texture2D(depth_map, v_shadow_coord.xy).r < v_shadow_coord.z + 0.003) {
-                v = 0.5;
+
+            for (int x = -1; x <= 1; ++x)
+            for (int y = -1; y <= 1; ++y) {
+                v -= (1.0 / 9.0) * step(texture2D(depth_map, v_shadow_coord.xy + vec2(x, y) / 1024.0).r,
+                                        v_shadow_coord.z + 0.001);
             }
-            vec3 col = normalize(v_norm) * 0.5 + vec3(0.5, 0.5, 0.5);
-            gl_FragColor = vec4(col * pow(0.85, v_depth), 1.0) * v;
+
+            // vec3 col = normalize(v_norm) * 0.5 + vec3(0.5, 0.5, 0.5);
+
+            vec3 ambient = 0.1 * color;
+            vec3 diffuse = 0.9 * color * min(v, max(0.0, dot(v_norm, -light_dir)));
+
+            gl_FragColor = vec4(ambient + diffuse * pow(0.85, v_depth), 1.0);
         })");
 
 
@@ -111,11 +118,13 @@ public:
 
             m_models.emplace_back(std::move(model));
         }
+        m_models[0].color = { 1, 0.8, 0.7 };
+        m_models[1].color = { 0.4, 1, 0.1 };
 
 
+        // init framebuffer
         m_depth_map = rmw::context.create_texture_2D(rmw::TextureFormat::Depth, 2 * 1024, 2 * 1024);
         m_framebuffer = rmw::context.create_framebuffer();
-
 #ifdef __EMSCRIPTEN__
         // XXX: the webgl framebuffer is unhappy without color attachment :(
         // is there a trick to get around this?
@@ -123,10 +132,10 @@ public:
                 rmw::TextureFormat::RGB, m_depth_map->get_width(), m_depth_map->get_height());
         m_framebuffer->attach_color(foobar);
 #endif
-
         m_framebuffer->attach_depth(m_depth_map);
         if (!m_framebuffer->is_complete()) LOG("framebuffer incomplete");
-     }
+
+    }
 
     bool loop() {
         SDL_Event e;
@@ -160,19 +169,15 @@ public:
                                 glm::translate(glm::vec3(0, -1, 0));
 
         glm::mat4 depth_mvp;
-        glm::vec3 light_pos;
+        glm::vec3 light_lookat = { 0, 0, 0 };
+        glm::vec3 light_pos = glm::vec3(3, 10, cosf(t * 0.5) * 8);
 
         // render depth map
         {
             rmw::context.clear({ 0, 0, 0, 1 }, m_framebuffer);
 
 
-            //light_pos = glm::vec3(sinf(t) * 8, 10, cosf(t) * 8);
-            light_pos = glm::vec3(1, 10, 7);
-
-            glm::mat4 view = glm::lookAt(light_pos,
-                                         glm::vec3(0, 0, 0),
-                                         glm::vec3(0, 1, 0));
+            glm::mat4 view = glm::lookAt(light_pos, light_lookat, glm::vec3(0, 1, 0));
             glm::mat4 projection = glm::ortho(-7.0f, 7.0f, -7.0f, 7.0f, 0.0f, 20.0f);
             depth_mvp = projection * view;
 
@@ -204,9 +209,11 @@ public:
             glm::mat4 biased_depth_mvp = bias * depth_mvp;
 
             for (const Model& model : m_models) {
+                m_shader->set_uniform("light_dir", glm::normalize(light_lookat - light_pos));
                 m_shader->set_uniform("normal_mtx", glm::transpose(glm::inverse(glm::mat3(model.transform))));
                 m_shader->set_uniform("depth_mvp", biased_depth_mvp * model.transform);
                 m_shader->set_uniform("mvp", mvp * model.transform);
+                m_shader->set_uniform("color", model.color);
                 rmw::context.draw(rs, m_shader, model.va);
             }
         }

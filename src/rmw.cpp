@@ -284,7 +284,7 @@ bool Texture2D::init(SDL_Surface* s, FilterMode filter) {
                 s->w, s->h, s->pixels, filter);
 }
 bool Texture2D::init(TextureFormat format, int w, int h, void* data, FilterMode filter) {
-    printf("error %d\n", glGetError());
+    //printf("error %d\n", glGetError());
     m_width  = w;
     m_height = h;
     m_format = format;
@@ -315,7 +315,6 @@ bool Texture2D::init(TextureFormat format, int w, int h, void* data, FilterMode 
                      m_width, m_height, 0, map_to_gl(m_format),
                      GL_UNSIGNED_BYTE, data);
     }
-    printf("glTexImage2D %d (%d)\n", glGetError(), format);
 
     if (filter == FilterMode::Trilinear) {
         glGenerateMipmap(GL_TEXTURE_2D);
@@ -357,7 +356,6 @@ void Framebuffer::attach_depth(const Texture2D::Ptr& t) {
 }
 bool Framebuffer::is_complete() const {
     gl.bind_framebuffer(m_handle);
-    printf("glCheckFramebufferStatus %d\n", glCheckFramebufferStatus(GL_FRAMEBUFFER));
     return glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
 }
 

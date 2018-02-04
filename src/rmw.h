@@ -290,9 +290,9 @@ private:
             }
         }
 
-        std::string name;
-        uint32_t    type;
-        int         location;
+        const std::string name;
+        const uint32_t    type;
+        const int         location;
         std::variant<
             Extent<float>,
             Extent<glm::vec2>,
