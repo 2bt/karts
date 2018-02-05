@@ -294,6 +294,7 @@ private:
         const uint32_t    type;
         const int         location;
         std::variant<
+            Extent<int>,
             Extent<float>,
             Extent<glm::vec2>,
             Extent<glm::vec3>,

@@ -219,6 +219,7 @@ bool Shader::init(const char* vs, const char* fs) {
         m_uniforms.emplace_back(name, type, location);
         Uniform& u = m_uniforms.back();
         switch (type) {
+        case GL_INT:        u.extent = Uniform::Extent<int>(); break;
         case GL_FLOAT:      u.extent = Uniform::Extent<float>(); break;
         case GL_FLOAT_VEC2: u.extent = Uniform::Extent<glm::vec2>(); break;
         case GL_FLOAT_VEC3: u.extent = Uniform::Extent<glm::vec3>(); break;
@@ -239,6 +240,7 @@ Shader::~Shader() {
 }
 
 
+void gl_uniform(int l, int v) { glUniform1i(l, v); }
 void gl_uniform(int l, float v) { glUniform1f(l, v); }
 void gl_uniform(int l, const glm::vec2& v) { glUniform2fv(l, 1, &v.x); }
 void gl_uniform(int l, const glm::vec3& v) { glUniform3fv(l, 1, &v.x); }

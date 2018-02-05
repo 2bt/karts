@@ -78,6 +78,7 @@ public:
         R"(#version 100
         precision mediump float;
         uniform sampler2D depth_map;
+        uniform float depth_map_size;
         uniform vec3 light_dir;
         uniform vec3 view_pos;
         uniform vec3 color;
@@ -85,31 +86,39 @@ public:
         varying vec4 v_shadow_coord;
         varying vec3 v_norm;
         varying float v_depth;
+        float shadow_sample(vec2 uv, float compare) {
+            return step(compare, texture2D(depth_map, uv).r);
+        }
+        float smooth_shadow_sample(vec2 uv, float compare) {
+            vec2 f = fract(uv + vec2(0.5));
+            vec2 c = floor(uv + vec2(0.5)) / depth_map_size;
+            float lb = shadow_sample(c + vec2(0.0, 0.0) / depth_map_size, compare);
+            float lt = shadow_sample(c + vec2(0.0, 1.0) / depth_map_size, compare);
+            float rb = shadow_sample(c + vec2(1.0, 0.0) / depth_map_size, compare);
+            float rt = shadow_sample(c + vec2(1.0, 1.0) / depth_map_size, compare);
+            return mix(mix(lb, lt, f.y), mix(rb, rt, f.y), f.x);
+        }
         void main() {
-
-            float v = 1.0;
-            for (int x = -1; x <= 1; ++x)
-            for (int y = -1; y <= 1; ++y) {
-                v -= (1.0 / 9.0) * step(texture2D(depth_map, v_shadow_coord.xy + vec2(x, y) / 512.0).r,
-                                        v_shadow_coord.z + 0.001);
+            float v = 0.0;
+            for (int x = -1; x <= 1; x += 1)
+            for (int y = -1; y <= 1; y += 1) {
+                vec2 uv = v_shadow_coord.xy * depth_map_size + vec2(x, y);
+                v += smooth_shadow_sample(uv, v_shadow_coord.z + 0.001) / 9.0;
             }
-
-            vec3 ambient  = 0.15 * color;
-            vec3 diffuse  = 0.85 * color * min(v, max(0.0, dot(v_norm, -light_dir)));
-
-            float shininess = 400.0;
+            vec3 ambient = 0.15 * color;
+            vec3 diffuse = 0.85 * color * min(v, max(0.0, dot(v_norm, -light_dir)));
+            float shininess = 200.0;
             vec3 halfway = normalize(-light_dir + normalize(view_pos - v_frag_pos));
-            vec3 specular = 0.4 * vec3(1.0, 1.0, 1.0) * pow(max(dot(v_norm, halfway), 0.0), shininess) * v;
-
+            vec3 specular = vec3(0.3) * pow(max(dot(v_norm, halfway), 0.0), shininess) * v;
+            vec3 color = ambient + diffuse + specular;
             vec3 fog = vec3(0.1, 0.15, 0.25);
-            gl_FragColor = vec4(mix(fog, ambient + diffuse + specular, pow(0.95, v_depth)), 1.0);
+            gl_FragColor = vec4(mix(fog, color, pow(0.95, v_depth)), 1.0);
         })");
-
-
 
         // init models
         for (const char* name : { "media/cat.obj", "media/hill.obj" }) {
-            Model model;
+            m_models.emplace_back();
+            Model & model = m_models.back();
             model.vb = rmw::context.create_vertex_buffer(rmw::BufferHint::StreamDraw);
             model.ib = rmw::context.create_index_buffer(rmw::BufferHint::StreamDraw);
             model.va = rmw::context.create_vertex_array();
@@ -117,21 +126,21 @@ public:
             model.va->set_attribute(0, model.vb, rmw::ComponentType::Float, 3, false, 0, 24);
             model.va->set_attribute(1, model.vb, rmw::ComponentType::Float, 3, false, 12, 24);
             model.va->set_index_buffer(model.ib);
-
             Mesh mesh;
             mesh.load(name);
             model.vb->init_data(mesh.vertices);
             model.ib->init_data(mesh.indices);
             model.va->set_count(mesh.indices.size());
-
-            m_models.emplace_back(std::move(model));
         }
         m_models[0].color = { 1, 0.8, 0.7 };
-        m_models[1].color = { 0.4, 1, 0.1 };
+        m_models[1].color = { 0.4, 0.6, 0.3 };
 
 
         // init framebuffer
-        m_depth_map = rmw::context.create_texture_2D(rmw::TextureFormat::Depth, 512, 512);
+        int depth_map_size = 1024;
+        m_shader->set_uniform("depth_map_size", (float) depth_map_size);
+        m_depth_map = rmw::context.create_texture_2D(rmw::TextureFormat::Depth,
+                                                     depth_map_size, depth_map_size);
         m_framebuffer = rmw::context.create_framebuffer();
 #ifdef __EMSCRIPTEN__
         // XXX: the webgl framebuffer is unhappy without color attachment :(
@@ -203,19 +212,15 @@ public:
         {
             rmw::context.clear({ 0.1, 0.15, 0.25, 1 });
 
-            m_shader->set_uniform("depth_map", m_depth_map);
-
-            glm::mat4 proj = glm::perspective(glm::radians(60.0f),
-                    rmw::context.get_aspect_ratio(), 0.1f, 100.0f);
-
+            glm::mat4 proj = glm::perspective(glm::radians(60.0f), rmw::context.get_aspect_ratio(), 0.1f, 100.0f);
             vp_mat = proj * m_eye.get_view_mat();
-
             static const glm::mat4 bias = { 0.5, 0.0, 0.0, 0.0,
                                             0.0, 0.5, 0.0, 0.0,
                                             0.0, 0.0, 0.5, 0.0,
                                             0.5, 0.5, 0.5, 1.0 };
             glm::mat4 biased_depth_vp_mat = bias * depth_vp_mat;
 
+            m_shader->set_uniform("depth_map", m_depth_map);
             m_shader->set_uniform("light_dir", glm::normalize(light_lookat - light_pos));
             m_shader->set_uniform("view_pos", m_eye.get_pos());
             for (const Model& model : m_models) {
