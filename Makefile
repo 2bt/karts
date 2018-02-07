@@ -1,5 +1,5 @@
-CF = -std=c++17 -Wall -O2
-LF = -Wall -lSDL2 -lSDL2_image -lGLEW -lGL
+CF = -std=c++17 -Wall -O2 $(shell pkg-config --cflags bullet)
+LF = -Wall -lSDL2 -lSDL2_image -lGLEW -lGL -lBulletDynamics -lBulletCollision -lLinearMath
 
 CXX = g++
 SRC = $(wildcard src/*.cpp)

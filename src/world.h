@@ -1,5 +1,7 @@
 #pragma once
 #include "rmw.h"
+#include <btBulletDynamicsCommon.h>
+
 
 
 struct Camera {
@@ -32,7 +34,6 @@ struct Model {
 };
 
 
-
 class World {
 public:
 
@@ -50,7 +51,19 @@ private:
     Camera               m_camera;
     Light                m_light;
 
-
+    // render stuff
     rmw::Shader::Ptr     m_light_shader;
     rmw::Shader::Ptr     m_model_shader;
+
+
+    // physics stuff
+    static void update(btDynamicsWorld* world, float dt) {
+        static_cast<World*>(world->getWorldUserInfo())->tick();
+    }
+    void tick();
+    std::unique_ptr<btDiscreteDynamicsWorld>             m_world;
+    std::unique_ptr<btSequentialImpulseConstraintSolver> m_solver;
+    std::unique_ptr<btDbvtBroadphase>                    m_broadphase;
+    std::unique_ptr<btCollisionDispatcher>               m_dispatcher;
+    std::unique_ptr<btDefaultCollisionConfiguration>     m_config;
 };

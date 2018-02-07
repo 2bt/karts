@@ -17,7 +17,6 @@ public:
         renderer3D.init();
         m_world.init();
     }
-
     bool loop() {
         SDL_Event e;
         while (rmw::context.poll_event(e)) {
@@ -32,27 +31,22 @@ public:
             default: break;
             }
         }
-
-
         m_world.update();
-
         m_world.draw();
-
         rmw::context.flip_buffers();
         return true;
     }
+    static void loop(void* arg) { static_cast<App*>(arg)->loop(); }
 private:
-
     World m_world;
 };
 
 
-void loop(void* arg) { static_cast<App*>(arg)->loop(); }
 
 int main(int argc, char** argv) {
     App app;
 #ifdef __EMSCRIPTEN__
-    emscripten_set_main_loop_arg(loop, &app, -1, true);
+    emscripten_set_main_loop_arg(App::loop, &app, -1, true);
 #else
     while (app.loop()) {}
 #endif

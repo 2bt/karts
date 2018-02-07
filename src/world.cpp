@@ -9,6 +9,8 @@
 #include <glm/gtx/transform.hpp>
 
 
+
+
 void init_light_map(Light& l) {
     int light_map_size = 1024;
     l.shadow_map = rmw::context.create_texture_2D(rmw::TextureFormat::Depth,
@@ -137,6 +139,19 @@ void World::init() {
     glm::mat4 proj = glm::ortho(-7.0f, 7.0f, -7.0f, 7.0f, 0.0f, 20.0f);
     m_light.vp_mat = proj * view;
     m_model_shader->set_uniform("light_map_size", (float) m_light.shadow_map->get_width());
+
+
+    // physics
+    m_config     = std::make_unique<btDefaultCollisionConfiguration>();
+    m_dispatcher = std::make_unique<btCollisionDispatcher>(m_config.get());
+    m_broadphase = std::make_unique<btDbvtBroadphase>();
+    m_solver     = std::make_unique<btSequentialImpulseConstraintSolver>();
+    m_world      = std::make_unique<btDiscreteDynamicsWorld>(m_dispatcher.get(),
+                                                             m_broadphase.get(),
+                                                             m_solver.get(),
+                                                             m_config.get());
+    m_world->setGravity(btVector3(0, -30, 0));
+    m_world->setInternalTickCallback(World::update, static_cast<void*>(this), false);
 }
 
 
@@ -177,7 +192,6 @@ void World::update() {
 
     update_camera();
 
-
     // rotate cat
     static double t = 0;
     t += 0.01;
@@ -185,7 +199,12 @@ void World::update() {
                             glm::rotate<float>(t, glm::vec3(1, 0, 0)) *
                             glm::translate(glm::vec3(0, -1, 0));
 
+    // physics
+    m_world->stepSimulation(1 / 60.0);
+}
 
+
+void World::tick() {
 }
 
 
