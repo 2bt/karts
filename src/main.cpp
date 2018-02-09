@@ -1,6 +1,7 @@
 // vim: et ts=4 sts=4 sw=4
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
+#include <html5.h>
 #endif
 #include "log.h"
 #include "renderer3d.h"
@@ -46,6 +47,14 @@ private:
 int main(int argc, char** argv) {
     App app;
 #ifdef __EMSCRIPTEN__
+    EmscriptenFullscreenStrategy strategy = {
+        EMSCRIPTEN_FULLSCREEN_SCALE_STRETCH,
+        EMSCRIPTEN_FULLSCREEN_CANVAS_SCALE_NONE,
+        EMSCRIPTEN_FULLSCREEN_FILTERING_DEFAULT,
+        nullptr,
+        nullptr
+    };
+    emscripten_enter_soft_fullscreen("canvas", &strategy);
     emscripten_set_main_loop_arg(App::loop, &app, -1, true);
 #else
     while (app.loop()) {}

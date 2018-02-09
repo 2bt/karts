@@ -47,7 +47,6 @@ private:
     void render_shadow_map();
     void render_models();
 
-    std::vector<Model>   m_models;
     Camera               m_camera;
     Light                m_light;
 

@@ -9,6 +9,100 @@
 #include <glm/gtx/transform.hpp>
 
 
+void init_model(Model& model, const Mesh& mesh) {
+    model.vb = rmw::context.create_vertex_buffer(rmw::BufferHint::StreamDraw);
+    model.ib = rmw::context.create_index_buffer(rmw::BufferHint::StreamDraw);
+    model.va = rmw::context.create_vertex_array();
+    model.va->set_primitive_type(rmw::PrimitiveType::Triangles);
+    model.va->set_attribute(0, model.vb, rmw::ComponentType::Float, 3, false, 0, 24);
+    model.va->set_attribute(1, model.vb, rmw::ComponentType::Float, 3, false, 12, 24);
+    model.va->set_index_buffer(model.ib);
+    model.vb->init_data(mesh.vertices);
+    model.ib->init_data(mesh.indices);
+    model.va->set_count(mesh.indices.size());
+}
+
+
+
+class Map {
+public:
+    void init() {
+        // model
+        Mesh mesh("assets/hill.obj");
+        init_model(m_model, mesh);
+        m_model.color = { 0.4, 0.6, 0.3 };
+        // physics
+        m_interface = std::make_unique<btTriangleIndexVertexArray>(
+                mesh.indices.size() / 3, mesh.indices.data(), sizeof(int) * 3,
+                mesh.vertices.size(), (float*) mesh.vertices.data(), sizeof(Mesh::Vertex));
+        m_shape = std::make_unique<btBvhTriangleMeshShape>(m_interface.get(), true);
+        btRigidBody::btRigidBodyConstructionInfo info(0, nullptr, m_shape.get());
+        info.m_startWorldTransform.setIdentity();
+        m_rigid_body = std::make_unique<btRigidBody>(info);
+    }
+
+    const Model& get_model() const { return m_model; }
+
+    btRigidBody* get_rigid_body() const { return m_rigid_body.get(); }
+
+private:
+    Model                                       m_model;
+    std::unique_ptr<btBvhTriangleMeshShape>     m_shape;
+    std::unique_ptr<btTriangleIndexVertexArray> m_interface;
+    std::unique_ptr<btRigidBody>                m_rigid_body;
+};
+
+
+class Kart {
+public:
+    void init() {
+        // model
+        Mesh mesh("assets/box.obj");
+        init_model(m_model, mesh);
+        m_model.color = { 0.7, 0.8, 1.0 };
+        // physics
+
+        glm::vec3 size;
+        for (auto& v : mesh.vertices) size = glm::max(size, v.p);
+
+        m_shape = std::make_unique<btBoxShape>(btVector3(size.x, size.y, size.z));
+        float mass = 100;
+        btVector3 inertia;
+        m_shape->calculateLocalInertia(mass, inertia);
+
+        m_motion_state = std::make_unique<btDefaultMotionState>(
+                btTransform(btQuaternion(1, 3, 0, 1), btVector3(0, 3, 0)));
+
+        btRigidBody::btRigidBodyConstructionInfo info(mass,
+                                                      m_motion_state.get(),
+                                                      m_shape.get(),
+                                                      inertia);
+
+        m_rigid_body = std::make_unique<btRigidBody>(info);
+    }
+
+    const Model& get_model() {
+        // XXX
+        btTransform t;
+        m_motion_state->getWorldTransform(t);
+        t.getOpenGLMatrix(reinterpret_cast<float*>(&m_model.transform));
+        return m_model;
+    }
+
+    btRigidBody* get_rigid_body() const { return m_rigid_body.get(); }
+
+private:
+    Model                                       m_model;
+    std::unique_ptr<btBoxShape>                 m_shape;
+    std::unique_ptr<btDefaultMotionState>       m_motion_state;
+    std::unique_ptr<btRigidBody>                m_rigid_body;
+};
+
+
+
+Map  m_map;
+Kart m_kart;
+
 
 
 void init_light_map(Light& l) {
@@ -29,23 +123,6 @@ void init_light_map(Light& l) {
     if (!l.framebuffer->is_complete()) LOG("framebuffer incomplete");
 }
 
-
-Model load_model(const char* name) {
-    Model model;
-    model.vb = rmw::context.create_vertex_buffer(rmw::BufferHint::StreamDraw);
-    model.ib = rmw::context.create_index_buffer(rmw::BufferHint::StreamDraw);
-    model.va = rmw::context.create_vertex_array();
-    model.va->set_primitive_type(rmw::PrimitiveType::Triangles);
-    model.va->set_attribute(0, model.vb, rmw::ComponentType::Float, 3, false, 0, 24);
-    model.va->set_attribute(1, model.vb, rmw::ComponentType::Float, 3, false, 12, 24);
-    model.va->set_index_buffer(model.ib);
-    Mesh mesh;
-    mesh.load(name);
-    model.vb->init_data(mesh.vertices);
-    model.ib->init_data(mesh.indices);
-    model.va->set_count(mesh.indices.size());
-    return model;
-}
 
 
 void World::init() {
@@ -125,12 +202,6 @@ void World::init() {
     m_camera.pos = { 2.896143, 4.247687, 3.40952 };
     m_camera.fov = 60;
 
-    // init models
-    m_models.emplace_back(load_model("media/cat.obj"));
-    m_models.emplace_back(load_model("media/hill.obj"));
-    m_models[0].color = { 1, 0.8, 0.7 };
-    m_models[1].color = { 0.4, 0.6, 0.3 };
-
 
     init_light_map(m_light);
     m_light.pos = glm::vec3(-3, 10, -8);
@@ -152,6 +223,15 @@ void World::init() {
                                                              m_config.get());
     m_world->setGravity(btVector3(0, -30, 0));
     m_world->setInternalTickCallback(World::update, static_cast<void*>(this), false);
+
+
+
+    // init objects
+    m_map.init();
+    m_world->addRigidBody(m_map.get_rigid_body());
+
+    m_kart.init();
+    m_world->addRigidBody(m_kart.get_rigid_body());
 }
 
 
@@ -192,14 +272,6 @@ void World::update() {
 
     update_camera();
 
-    // rotate cat
-    static double t = 0;
-    t += 0.01;
-    m_models[0].transform = glm::translate(glm::vec3(0, 1, 0)) *
-                            glm::rotate<float>(t, glm::vec3(1, 0, 0)) *
-                            glm::translate(glm::vec3(0, -1, 0));
-
-    // physics
     m_world->stepSimulation(1 / 60.0);
 }
 
@@ -215,10 +287,15 @@ void World::render_shadow_map() {
 
     rmw::context.clear({}, m_light.framebuffer);
     rs.cull_face = rmw::CullFace::Front;
-    for (const Model& model : m_models) {
+
+    auto draw = [&](const Model& model) {
         m_light_shader->set_uniform("light_mvp_mat", m_light.vp_mat * model.transform);
         rmw::context.draw(rs, m_light_shader, model.va, m_light.framebuffer);
-    }
+    };
+
+    draw(m_map.get_model());
+    draw(m_kart.get_model());
+
     rs.cull_face = rmw::CullFace::Back;
 }
 
@@ -238,14 +315,19 @@ void World::render_models() {
     m_model_shader->set_uniform("shadow_map", m_light.shadow_map);
     m_model_shader->set_uniform("light_dir", m_light.dir);
     m_model_shader->set_uniform("view_pos", m_camera.pos);
-    for (const Model& model : m_models) {
+
+
+    auto draw = [&](const Model& model) {
         m_model_shader->set_uniform("normal_mat", glm::transpose(glm::inverse(glm::mat3(model.transform))));
         m_model_shader->set_uniform("biased_shadow_mvp_mat", biased_shadow_vp_mat * model.transform);
         m_model_shader->set_uniform("model_mat", model.transform);
         m_model_shader->set_uniform("mvp_mat", m_camera.vp_mat * model.transform);
         m_model_shader->set_uniform("color", model.color);
         rmw::context.draw(rs, m_model_shader, model.va);
-    }
+    };
+
+    draw(m_map.get_model());
+    draw(m_kart.get_model());
 }
 
 
@@ -258,33 +340,32 @@ void World::draw() {
 
 
     // debug render shadow map
-    if (0)
-    {
-        auto vb = rmw::context.create_vertex_buffer(rmw::BufferHint::StreamDraw);
-        std::vector<int8_t> data = { 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, };
-        vb->init_data(data);
-        auto va = rmw::context.create_vertex_array();
-        va->set_primitive_type(rmw::PrimitiveType::Triangles);
-        va->set_count(6);
-        va->set_attribute(0, vb, rmw::ComponentType::Int8, 2, false, 0, 2);
-        auto shader = rmw::context.create_shader(R"(#version 100
-        attribute vec2 a_pos;
-        varying vec2 v_uv;
-        void main() {
-            gl_Position = vec4((a_pos - vec2(0.5)) * 1.0, 0, 1.0);
-            v_uv = a_pos;
-        })",
-        R"(#version 100
-        precision mediump float;
-        varying vec2 v_uv;
-        uniform sampler2D tex;
-        void main() {
-            gl_FragColor = vec4(texture2D(tex, v_uv).rrr, 1.0);
-        })");
-        rmw::RenderState rs;
-        shader->set_uniform("tex", m_light.shadow_map);
-        rmw::context.draw(rs, shader, va);
-    }
+//    {
+//        auto vb = rmw::context.create_vertex_buffer(rmw::BufferHint::StreamDraw);
+//        std::vector<int8_t> data = { 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, };
+//        vb->init_data(data);
+//        auto va = rmw::context.create_vertex_array();
+//        va->set_primitive_type(rmw::PrimitiveType::Triangles);
+//        va->set_count(6);
+//        va->set_attribute(0, vb, rmw::ComponentType::Int8, 2, false, 0, 2);
+//        auto shader = rmw::context.create_shader(R"(#version 100
+//        attribute vec2 a_pos;
+//        varying vec2 v_uv;
+//        void main() {
+//            gl_Position = vec4((a_pos - vec2(0.5)) * 1.0, 0, 1.0);
+//            v_uv = a_pos;
+//        })",
+//        R"(#version 100
+//        precision mediump float;
+//        varying vec2 v_uv;
+//        uniform sampler2D tex;
+//        void main() {
+//            gl_FragColor = vec4(texture2D(tex, v_uv).rrr, 1.0);
+//        })");
+//        rmw::RenderState rs;
+//        shader->set_uniform("tex", m_light.shadow_map);
+//        rmw::context.draw(rs, shader, va);
+//    }
 
 
 

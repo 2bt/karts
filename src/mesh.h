@@ -6,6 +6,12 @@
 
 struct Mesh {
 
+    Mesh() {}
+
+    Mesh(const char* name) {
+        load(name);
+    }
+
     bool load(const char* name);
 
     struct Vertex {
