@@ -9,102 +9,6 @@
 #include <glm/gtx/transform.hpp>
 
 
-void init_model(Model& model, const Mesh& mesh) {
-    model.vb = rmw::context.create_vertex_buffer(rmw::BufferHint::StreamDraw);
-    model.ib = rmw::context.create_index_buffer(rmw::BufferHint::StreamDraw);
-    model.va = rmw::context.create_vertex_array();
-    model.va->set_primitive_type(rmw::PrimitiveType::Triangles);
-    model.va->set_attribute(0, model.vb, rmw::ComponentType::Float, 3, false, 0, 24);
-    model.va->set_attribute(1, model.vb, rmw::ComponentType::Float, 3, false, 12, 24);
-    model.va->set_index_buffer(model.ib);
-    model.vb->init_data(mesh.vertices);
-    model.ib->init_data(mesh.indices);
-    model.va->set_count(mesh.indices.size());
-}
-
-
-
-class Map {
-public:
-    void init() {
-        // model
-        Mesh mesh("assets/hill.obj");
-        init_model(m_model, mesh);
-        m_model.color = { 0.4, 0.6, 0.3 };
-        // physics
-        m_interface = std::make_unique<btTriangleIndexVertexArray>(
-                mesh.indices.size() / 3, mesh.indices.data(), sizeof(int) * 3,
-                mesh.vertices.size(), (float*) mesh.vertices.data(), sizeof(Mesh::Vertex));
-        m_shape = std::make_unique<btBvhTriangleMeshShape>(m_interface.get(), true);
-        btRigidBody::btRigidBodyConstructionInfo info(0, nullptr, m_shape.get());
-        info.m_startWorldTransform.setIdentity();
-        m_rigid_body = std::make_unique<btRigidBody>(info);
-    }
-
-    const Model& get_model() const { return m_model; }
-
-    btRigidBody* get_rigid_body() const { return m_rigid_body.get(); }
-
-private:
-    Model                                       m_model;
-    std::unique_ptr<btBvhTriangleMeshShape>     m_shape;
-    std::unique_ptr<btTriangleIndexVertexArray> m_interface;
-    std::unique_ptr<btRigidBody>                m_rigid_body;
-};
-
-
-class Kart {
-public:
-    void init() {
-        // model
-        Mesh mesh("assets/box.obj");
-        init_model(m_model, mesh);
-        m_model.color = { 0.7, 0.8, 1.0 };
-        // physics
-
-        glm::vec3 size;
-        for (auto& v : mesh.vertices) size = glm::max(size, v.p);
-
-        m_shape = std::make_unique<btBoxShape>(btVector3(size.x, size.y, size.z));
-        float mass = 100;
-        btVector3 inertia;
-        m_shape->calculateLocalInertia(mass, inertia);
-
-        m_motion_state = std::make_unique<btDefaultMotionState>(
-                btTransform(btQuaternion(1, 3, 0, 1), btVector3(0, 3, 0)));
-
-        btRigidBody::btRigidBodyConstructionInfo info(mass,
-                                                      m_motion_state.get(),
-                                                      m_shape.get(),
-                                                      inertia);
-
-        m_rigid_body = std::make_unique<btRigidBody>(info);
-    }
-
-    const Model& get_model() {
-        // XXX
-        btTransform t;
-        m_motion_state->getWorldTransform(t);
-        t.getOpenGLMatrix(reinterpret_cast<float*>(&m_model.transform));
-        return m_model;
-    }
-
-    btRigidBody* get_rigid_body() const { return m_rigid_body.get(); }
-
-private:
-    Model                                       m_model;
-    std::unique_ptr<btBoxShape>                 m_shape;
-    std::unique_ptr<btDefaultMotionState>       m_motion_state;
-    std::unique_ptr<btRigidBody>                m_rigid_body;
-};
-
-
-
-Map  m_map;
-Kart m_kart;
-
-
-
 void init_light_map(Light& l) {
     int light_map_size = 1024;
     l.shadow_map = rmw::context.create_texture_2D(rmw::TextureFormat::Depth,
@@ -277,6 +181,8 @@ void World::update() {
 
 
 void World::tick() {
+
+    m_kart.tick();
 }
 
 

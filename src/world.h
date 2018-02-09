@@ -1,6 +1,6 @@
 #pragma once
 #include "rmw.h"
-#include <btBulletDynamicsCommon.h>
+#include "map.h"
 
 
 
@@ -21,16 +21,6 @@ struct Light {
 
     rmw::Framebuffer::Ptr framebuffer;
     rmw::Texture2D::Ptr   shadow_map;
-};
-
-
-
-struct Model {
-    rmw::VertexBuffer::Ptr vb;
-    rmw::IndexBuffer::Ptr  ib;
-    rmw::VertexArray::Ptr  va;
-    glm::mat4              transform;
-    glm::vec3              color;
 };
 
 
@@ -60,9 +50,14 @@ private:
         static_cast<World*>(world->getWorldUserInfo())->tick();
     }
     void tick();
-    std::unique_ptr<btDiscreteDynamicsWorld>             m_world;
+
+
+    Map                                                  m_map;
+    Kart                                                 m_kart;
+
     std::unique_ptr<btSequentialImpulseConstraintSolver> m_solver;
     std::unique_ptr<btDbvtBroadphase>                    m_broadphase;
     std::unique_ptr<btCollisionDispatcher>               m_dispatcher;
     std::unique_ptr<btDefaultCollisionConfiguration>     m_config;
+    std::unique_ptr<btDiscreteDynamicsWorld>             m_world;
 };
