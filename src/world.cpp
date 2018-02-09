@@ -103,7 +103,7 @@ void World::init() {
 
     m_camera.ang_x = 0.75;
     m_camera.ang_y = -0.69;
-    m_camera.pos = { 2.896143, 4.247687, 3.40952 };
+    m_camera.pos = { 4.665983, 6.837914, 5.553909 };
     m_camera.fov = 60;
 
 
@@ -163,7 +163,7 @@ void World::update_camera() {
     };
 
     m_camera.pos += mov;
-//    LOG("camera: %f %f %f %f %f", m_camera.ang_x, m_camera.ang_y, m_camera.pos.x, m_camera.pos.y, m_camera.pos.z);
+    //LOG("camera: %f %f %f %f %f", m_camera.ang_x, m_camera.ang_y, m_camera.pos.x, m_camera.pos.y, m_camera.pos.z);
 
     m_camera.vp_mat = glm::perspective(glm::radians(m_camera.fov), rmw::context.get_aspect_ratio(), 0.1f, 100.0f) *
                       glm::rotate<float>(m_camera.ang_x, glm::vec3(1, 0, 0)) *

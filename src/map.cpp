@@ -57,6 +57,7 @@ void Kart::init() {
                                                   inertia);
 
     m_rigid_body = std::make_unique<btRigidBody>(info);
+    m_rigid_body->setActivationState(DISABLE_DEACTIVATION);
 }
 
 void Kart::tick() {
