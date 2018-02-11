@@ -66,7 +66,7 @@ void Kart::init(btDynamicsWorld* world) {
 
     m_rigid_body->setActivationState(DISABLE_DEACTIVATION);
     m_rigid_body->setDamping(0.1, 0.1);
-
+    m_rigid_body->setUserPointer(this);
 }
 
 
@@ -77,15 +77,14 @@ struct Sensor {
 std::array<Sensor, 4> m_sensors;
 
 
-inline glm::vec3 to_glm(const btVector3& v) { return glm::vec3(v.x(), v.y(), v.z()); }
-inline btVector3 to_bt(const glm::vec3& v) { return btVector3(v.x, v.y, v.z); }
-
 
 void Kart::update() {
 
     btTransform t;
     m_motion_state->getWorldTransform(t);
     t.getOpenGLMatrix(reinterpret_cast<float*>(&m_model.transform));
+
+
 
     // suspension
     for (int i = 0; i < 4; ++i) {
@@ -116,7 +115,7 @@ void Kart::update() {
 //            float v = glm::dot(vel, n);
 
             float f = 1 - cb.m_closestHitFraction;
-            m_rigid_body->applyForce(to_bt(n) * sensor_length * f * 150, o);
+            m_rigid_body->applyForce(to_bt(n) * 150 * f, o);
         }
     }
 
@@ -135,6 +134,7 @@ void Kart::update() {
 
     if (ks[SDL_SCANCODE_X]) {
         btTransform& t = m_rigid_body->getWorldTransform();
+        t.setOrigin(btVector3(0, 3, 0));
         t.setRotation(btQuaternion(0, 0, 0));
         m_motion_state->setWorldTransform(t);
     }

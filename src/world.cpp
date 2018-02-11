@@ -168,6 +168,31 @@ void World::update_camera() {
                       glm::translate(-m_camera.pos);
 
     renderer3D.set_transformation(m_camera.vp_mat);
+
+
+    // picking
+    static glm::vec3 foobar;
+    {
+        int x, y;
+        Uint32 buttons = SDL_GetMouseState(&x, &y);
+        if (buttons & SDL_BUTTON(1)) {
+            glm::vec4 v = glm::inverse(m_camera.vp_mat) * glm::vec4(x / (float) rmw::context.get_width() * 2 - 1,
+                                                                    y / (float) rmw::context.get_height() * -2 + 1,
+                                                                    1, 1);
+            glm::vec3 trg = glm::vec3(v) / v.w;
+            btVector3 o = to_bt(m_camera.pos);
+            btVector3 p = to_bt(trg);
+            btCollisionWorld::ClosestRayResultCallback cb(o, p);
+            m_world->rayTest(o, p, cb);
+            if (cb.hasHit()) {
+                trg = to_glm(cb.m_hitPointWorld);
+                foobar = trg;
+                void* obj = cb.m_collisionObject->getUserPointer();
+                LOG("%p", obj);
+            }
+        }
+    }
+    renderer3D.point(foobar);
 }
 
 

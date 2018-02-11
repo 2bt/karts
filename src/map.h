@@ -4,6 +4,10 @@
 #include <btBulletDynamicsCommon.h>
 
 
+inline glm::vec3 to_glm(const btVector3& v) { return glm::vec3(v.x(), v.y(), v.z()); }
+inline btVector3 to_bt(const glm::vec3& v) { return btVector3(v.x, v.y, v.z); }
+
+
 struct Model {
     rmw::VertexBuffer::Ptr vb;
     rmw::IndexBuffer::Ptr  ib;
