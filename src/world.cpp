@@ -111,7 +111,7 @@ void World::init() {
     m_light.pos = glm::vec3(-3, 10, -8);
     m_light.dir = glm::normalize(glm::vec3(0, 0, 0) - m_light.pos);
     glm::mat4 view = glm::lookAt(m_light.pos, m_light.pos + m_light.dir, glm::vec3(0, 1, 0));
-    glm::mat4 proj = glm::ortho(-7.0f, 7.0f, -7.0f, 7.0f, 0.0f, 20.0f);
+    glm::mat4 proj = glm::ortho(-8.0f, 8.0f, -8.0f, 8.0f, 0.0f, 20.0f);
     m_light.vp_mat = proj * view;
     m_model_shader->set_uniform("light_map_size", (float) m_light.shadow_map->get_width());
 
@@ -125,17 +125,14 @@ void World::init() {
                                                              m_broadphase.get(),
                                                              m_solver.get(),
                                                              m_config.get());
-    m_world->setGravity(btVector3(0, -30, 0));
+    m_world->setGravity(btVector3(0, -2, 0));
     m_world->setInternalTickCallback(World::update, static_cast<void*>(this), false);
 
 
 
     // init objects
-    m_map.init();
-    m_world->addRigidBody(m_map.get_rigid_body());
-
-    m_kart.init();
-    m_world->addRigidBody(m_kart.get_rigid_body());
+    m_map.init(m_world.get());
+    m_kart.init(m_world.get());
 }
 
 
@@ -169,6 +166,8 @@ void World::update_camera() {
                       glm::rotate<float>(m_camera.ang_x, glm::vec3(1, 0, 0)) *
                       glm::rotate<float>(m_camera.ang_y, glm::vec3(0, 1, 0)) *
                       glm::translate(-m_camera.pos);
+
+    renderer3D.set_transformation(m_camera.vp_mat);
 }
 
 
@@ -176,6 +175,7 @@ void World::update() {
 
     update_camera();
 
+    m_kart.update();
     m_world->stepSimulation(1 / 60.0);
 }
 
@@ -234,6 +234,9 @@ void World::render_models() {
 
     draw(m_map.get_model());
     draw(m_kart.get_model());
+
+
+    m_kart.debug_draw();
 }
 
 
@@ -276,41 +279,34 @@ void World::draw() {
 
 
     // debug render light frustum
-    {
-        renderer3D.set_transformation(m_camera.vp_mat);
+//    {
+//        renderer3D.set_color(255, 0, 0);
+//        renderer3D.set_point_size(5);
+//        renderer3D.point(m_light.pos);
+//        glm::mat4 inv_light = glm::inverse(m_light.vp_mat);
+//        glm::vec3 corners[8];
+//        int i = 0;
+//        for (int x : {-1, 1})
+//        for (int y : {-1, 1})
+//        for (int z : {-1, 1}) {
+//            glm::vec4 p = inv_light * glm::vec4(x, y, z, 1);
+//            corners[i++] = glm::vec3(p) / p.w;
+//        }
+//        renderer3D.line(corners[0], corners[1]);
+//        renderer3D.line(corners[0], corners[2]);
+//        renderer3D.line(corners[1], corners[3]);
+//        renderer3D.line(corners[2], corners[3]);
+//        renderer3D.line(corners[4], corners[5]);
+//        renderer3D.line(corners[4], corners[6]);
+//        renderer3D.line(corners[5], corners[7]);
+//        renderer3D.line(corners[6], corners[7]);
+//        renderer3D.line(corners[0], corners[4]);
+//        renderer3D.line(corners[1], corners[5]);
+//        renderer3D.line(corners[2], corners[6]);
+//        renderer3D.line(corners[3], corners[7]);
+//        renderer3D.line(corners[0], corners[6]);
+//        renderer3D.line(corners[2], corners[4]);
+//    }
 
-        renderer3D.set_color(255, 0, 0);
-        renderer3D.set_point_size(5);
-        renderer3D.point(m_light.pos);
-
-        glm::mat4 inv_light = glm::inverse(m_light.vp_mat);
-        glm::vec3 corners[8];
-        int i = 0;
-        for (int x : {-1, 1})
-        for (int y : {-1, 1})
-        for (int z : {-1, 1}) {
-            glm::vec4 p = inv_light * glm::vec4(x, y, z, 1);
-            corners[i++] = glm::vec3(p) / p.w;
-        }
-
-        renderer3D.line(corners[0], corners[1]);
-        renderer3D.line(corners[0], corners[2]);
-        renderer3D.line(corners[1], corners[3]);
-        renderer3D.line(corners[2], corners[3]);
-
-        renderer3D.line(corners[4], corners[5]);
-        renderer3D.line(corners[4], corners[6]);
-        renderer3D.line(corners[5], corners[7]);
-        renderer3D.line(corners[6], corners[7]);
-
-        renderer3D.line(corners[0], corners[4]);
-        renderer3D.line(corners[1], corners[5]);
-        renderer3D.line(corners[2], corners[6]);
-        renderer3D.line(corners[3], corners[7]);
-
-        renderer3D.line(corners[0], corners[6]);
-        renderer3D.line(corners[2], corners[4]);
-
-        renderer3D.flush();
-    }
+    renderer3D.flush();
 }

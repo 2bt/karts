@@ -7,24 +7,23 @@ class Renderer3D {
 public:
 
     void init() {
-        m_shader = rmw::context.create_shader(
-            R"(#version 100
-                attribute vec3 in_pos;
-                attribute vec4 in_color;
-                attribute float in_point_size;
-                uniform mat4 mvp;
-                varying vec4 ex_color;
-                void main() {
-                gl_Position = mvp * vec4(in_pos, 1.0);
-                ex_color = in_color;
-                gl_PointSize = in_point_size;
-                })",
-            R"(#version 100
-                precision mediump float;
-                varying vec4 ex_color;
-                void main() {
-                    gl_FragColor = ex_color;
-                })");
+        m_shader = rmw::context.create_shader(R"(#version 100
+        attribute vec3 in_pos;
+        attribute vec4 in_color;
+        attribute float in_point_size;
+        uniform mat4 mvp;
+        varying vec4 ex_color;
+        void main() {
+            gl_Position = mvp * vec4(in_pos, 1.0);
+            ex_color = in_color;
+            gl_PointSize = in_point_size;
+        })",
+        R"(#version 100
+        precision mediump float;
+        varying vec4 ex_color;
+        void main() {
+            gl_FragColor = ex_color;
+        })");
 
         m_rs.line_width = 1;
         m_rs.depth_test_enabled = true;
@@ -88,6 +87,7 @@ public:
     }
 
     void flush() {
+        if (m_verts.empty()) return;
         m_vb->init_data(m_verts);
         m_va->set_count(m_verts.size());
         m_verts.clear();

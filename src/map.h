@@ -15,11 +15,8 @@ struct Model {
 
 class Map {
 public:
-    void init();
-
+    void init(btDynamicsWorld* world);
     const Model& get_model() const { return m_model; }
-
-    btRigidBody* get_rigid_body() const { return m_rigid_body.get(); }
 
 private:
     Mesh                                        m_mesh;
@@ -32,19 +29,11 @@ private:
 
 class Kart {
 public:
-    void init();
-
+    void init(btDynamicsWorld* world);
+    void update();
     void tick();
-
-    const Model& get_model() {
-        // XXX
-        btTransform t;
-        m_motion_state->getWorldTransform(t);
-        t.getOpenGLMatrix(reinterpret_cast<float*>(&m_model.transform));
-        return m_model;
-    }
-
-    btRigidBody* get_rigid_body() const { return m_rigid_body.get(); }
+    void debug_draw();
+    const Model& get_model() const { return m_model; }
 
 private:
     Model                                 m_model;
@@ -52,6 +41,8 @@ private:
     std::unique_ptr<btBoxShape>           m_shape;
     std::unique_ptr<btDefaultMotionState> m_motion_state;
     std::unique_ptr<btRigidBody>          m_rigid_body;
+    btDynamicsWorld*                      m_world;
+
 };
 
 
