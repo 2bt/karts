@@ -118,7 +118,7 @@ void Kart::update() {
 //            float v = glm::dot(vel, n);
 
             float f = 1 - cb.m_closestHitFraction;
-            m_rigid_body->applyForce(to_bt(n) * 150 * f, o);
+            m_rigid_body->applyForce(to_bt(n) * 150 * f, o - t.getOrigin());
         }
     }
 
