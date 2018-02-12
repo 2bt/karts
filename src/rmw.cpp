@@ -303,16 +303,20 @@ bool Texture2D::init(TextureFormat format, int w, int h, void* data, FilterMode 
                 filter == FilterMode::Trilinear ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
     }
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
     // XXX: the browser is very finicky. this is the result of trial and error.
     if (m_format == TextureFormat::Depth) {
+        float c[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, c);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT16,
                      m_width, m_height, 0, map_to_gl(m_format),
                      GL_UNSIGNED_INT, data);
     }
     else {
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
         glTexImage2D(GL_TEXTURE_2D, 0, map_to_gl(m_format),
                      m_width, m_height, 0, map_to_gl(m_format),
                      GL_UNSIGNED_BYTE, data);

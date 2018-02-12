@@ -1,3 +1,4 @@
+// vim: et ts=4 sts=4 sw=4
 #include "map.h"
 #include "mesh.h"
 #include "log.h"
@@ -22,6 +23,8 @@ void init_model(Model& model, const Mesh& mesh) {
 void Map::init(btDynamicsWorld* world) {
     // XXX: the mesh must be kept alive because the shape needs it
     m_mesh.load("assets/hill.obj");
+    for (auto& v : m_mesh.vertices) v.p *= 3.0f;
+
     init_model(m_model, m_mesh);
     m_model.color = { 0.4, 0.6, 0.3 };
 
@@ -131,6 +134,7 @@ void Kart::update() {
         m_rigid_body->applyImpulse(btVector3(0, 200, 0), btVector3(s.x, s.y, s.z));
 
     }
+    old_q = q;
 
     if (ks[SDL_SCANCODE_X]) {
         btTransform& t = m_rigid_body->getWorldTransform();
@@ -139,10 +143,8 @@ void Kart::update() {
         m_motion_state->setWorldTransform(t);
     }
 
-    m_rigid_body->applyTorque(btVector3(0, (!!ks[SDL_SCANCODE_C] - ks[SDL_SCANCODE_V]) * 100, 0));
-
-    old_q = q;
-
+    m_rigid_body->applyTorque(
+            btVector3(0, (!!ks[SDL_SCANCODE_C] - ks[SDL_SCANCODE_V]) * 100, 0));
 
 }
 

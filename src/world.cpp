@@ -28,7 +28,6 @@ void init_light_map(Light& l) {
 }
 
 
-
 void World::init() {
 
     m_light_shader = rmw::context.create_shader(R"(#version 100
@@ -108,13 +107,7 @@ void World::init() {
 
 
     init_light_map(m_light);
-    m_light.pos = glm::vec3(-3, 10, -8);
-    m_light.dir = glm::normalize(glm::vec3(0, 0, 0) - m_light.pos);
-    glm::mat4 view = glm::lookAt(m_light.pos, m_light.pos + m_light.dir, glm::vec3(0, 1, 0));
-    glm::mat4 proj = glm::ortho(-8.0f, 8.0f, -8.0f, 8.0f, 0.0f, 20.0f);
-    m_light.vp_mat = proj * view;
-    m_model_shader->set_uniform("light_map_size", (float) m_light.shadow_map->get_width());
-
+    m_light.dir = glm::normalize(glm::vec3(3, -10, 6));
 
     // physics
     m_config     = std::make_unique<btDefaultCollisionConfiguration>();
@@ -153,52 +146,73 @@ void World::update_camera() {
     float cx = cosf(m_camera.ang_x);
     float sx = sinf(m_camera.ang_x);
 
-    glm::vec3 mov = {
-        x * cy - z * sy * cx + sy * sx * y,
-        y * cx + z * sx,
-        x * sy + z * cy * cx - cy * sx * y,
-    };
+    m_camera.pos += glm::vec3(x * cy - z * sy * cx + sy * sx * y,
+                              y * cx + z * sx,
+                              x * sy + z * cy * cx - cy * sx * y);
 
-    m_camera.pos += mov;
-    //LOG("camera: %f %f %f %f %f", m_camera.ang_x, m_camera.ang_y, m_camera.pos.x, m_camera.pos.y, m_camera.pos.z);
-
-    m_camera.vp_mat = glm::perspective(glm::radians(m_camera.fov), rmw::context.get_aspect_ratio(), 0.1f, 100.0f) *
+    m_camera.vp_mat = glm::perspective(glm::radians(m_camera.fov),
+                                       rmw::context.get_aspect_ratio(), 0.1f, 100.0f) *
                       glm::rotate<float>(m_camera.ang_x, glm::vec3(1, 0, 0)) *
                       glm::rotate<float>(m_camera.ang_y, glm::vec3(0, 1, 0)) *
                       glm::translate(-m_camera.pos);
 
     renderer3D.set_transformation(m_camera.vp_mat);
 
+//    LOG("camera: %f %f %f %f %f", m_camera.ang_x, m_camera.ang_y,
+//        m_camera.pos.x, m_camera.pos.y, m_camera.pos.z);
 
-    // picking
-    static glm::vec3 foobar;
-    {
-        int x, y;
-        Uint32 buttons = SDL_GetMouseState(&x, &y);
-        if (buttons & SDL_BUTTON(1)) {
-            glm::vec4 v = glm::inverse(m_camera.vp_mat) * glm::vec4(x / (float) rmw::context.get_width() * 2 - 1,
-                                                                    y / (float) rmw::context.get_height() * -2 + 1,
-                                                                    1, 1);
-            glm::vec3 trg = glm::vec3(v) / v.w;
-            btVector3 o = to_bt(m_camera.pos);
-            btVector3 p = to_bt(trg);
-            btCollisionWorld::ClosestRayResultCallback cb(o, p);
-            m_world->rayTest(o, p, cb);
-            if (cb.hasHit()) {
-                trg = to_glm(cb.m_hitPointWorld);
-                foobar = trg;
-                void* obj = cb.m_collisionObject->getUserPointer();
-                LOG("%p", obj);
+}
+
+
+void World::update_light() {
+
+    float cy = cosf(m_camera.ang_y);
+    float sy = sinf(m_camera.ang_y);
+    m_light.pos = glm::vec3(m_camera.pos.x, 0, m_camera.pos.z) +
+                  glm::vec3(sy, 0, -cy) * 8.0f;
+
+    glm::mat4 view = glm::lookAt(m_light.pos - m_light.dir * 20.0f,
+                                 m_light.pos, glm::vec3(0, 1, 0));
+    float s = 10;
+    glm::mat4 proj = glm::ortho(-s, s, -s, s, 0.0f, s * 3);
+
+    m_light.vp_mat = proj * view;
+    m_model_shader->set_uniform("light_map_size", (float) m_light.shadow_map->get_width());
+}
+
+
+void World::check_picking() {
+    int x, y;
+    Uint32 buttons = SDL_GetMouseState(&x, &y);
+    if (buttons & SDL_BUTTON(1)) {
+
+        glm::vec4 v = glm::inverse(m_camera.vp_mat) *
+                      glm::vec4(x / (float) rmw::context.get_width() * 2 - 1,
+                                y / (float) rmw::context.get_height() * -2 + 1,
+                                1, 1);
+
+        glm::vec3 trg = glm::vec3(v) / v.w;
+        btVector3 o = to_bt(m_camera.pos);
+        btVector3 p = to_bt(trg);
+        btCollisionWorld::ClosestRayResultCallback cb(o, p);
+        m_world->rayTest(o, p, cb);
+        if (cb.hasHit()) {
+            void* ptr = cb.m_collisionObject->getUserPointer();
+            if (ptr) {
+                GameObject* obj = static_cast<GameObject*>(ptr);
+                obj->pick(to_glm(cb.m_hitPointWorld),
+                          to_glm(cb.m_hitNormalWorld));
             }
         }
     }
-    renderer3D.point(foobar);
 }
 
 
 void World::update() {
 
     update_camera();
+    update_light();
+    check_picking();
 
     m_kart.update();
     m_world->stepSimulation(1 / 60.0);
@@ -306,8 +320,6 @@ void World::draw() {
     // debug render light frustum
 //    {
 //        renderer3D.set_color(255, 0, 0);
-//        renderer3D.set_point_size(5);
-//        renderer3D.point(m_light.pos);
 //        glm::mat4 inv_light = glm::inverse(m_light.vp_mat);
 //        glm::vec3 corners[8];
 //        int i = 0;

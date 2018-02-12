@@ -1,3 +1,4 @@
+// vim: et ts=4 sts=4 sw=4
 #pragma once
 #include "rmw.h"
 #include "mesh.h"
@@ -17,36 +18,39 @@ struct Model {
 };
 
 
-class Map {
+class GameObject {
+public:
+    const Model& get_model() const { return m_model; }
+    void pick(const glm::vec3& pos, const glm::vec3& normal) {}
+
+protected:
+    Model m_model;
+};
+
+
+class Map : public GameObject {
 public:
     void init(btDynamicsWorld* world);
-    const Model& get_model() const { return m_model; }
 
 private:
     Mesh                                        m_mesh;
-    Model                                       m_model;
     std::unique_ptr<btBvhTriangleMeshShape>     m_shape;
     std::unique_ptr<btTriangleIndexVertexArray> m_interface;
     std::unique_ptr<btRigidBody>                m_rigid_body;
 };
 
 
-class Kart {
+class Kart : public GameObject {
 public:
     void init(btDynamicsWorld* world);
     void update();
     void tick();
     void debug_draw();
-    const Model& get_model() const { return m_model; }
 
 private:
-    Model                                 m_model;
     glm::vec3                             m_size;
     std::unique_ptr<btBoxShape>           m_shape;
     std::unique_ptr<btDefaultMotionState> m_motion_state;
     std::unique_ptr<btRigidBody>          m_rigid_body;
     btDynamicsWorld*                      m_world;
-
 };
-
-

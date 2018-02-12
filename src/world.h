@@ -1,3 +1,4 @@
+// vim: et ts=4 sts=4 sw=4
 #pragma once
 #include "rmw.h"
 #include "map.h"
@@ -34,6 +35,8 @@ public:
 private:
 
     void update_camera();
+    void update_light();
+    void check_picking();
     void render_shadow_map();
     void render_models();
 
