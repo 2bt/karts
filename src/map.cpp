@@ -73,6 +73,17 @@ void Kart::init(btDynamicsWorld* world) {
 }
 
 
+glm::vec3 m_pick_pos;
+glm::vec3 m_pick_normal;
+
+
+void Kart::pick(const glm::vec3& pos, const glm::vec3& normal) {
+    glm::mat4 inv = glm::inverse(m_model.transform);
+    m_pick_pos    = glm::vec3(inv * glm::vec4(pos, 1));
+    m_pick_normal = glm::vec3(inv * glm::vec4(normal, 0));
+}
+
+
 struct Sensor {
     glm::vec3 o;
     glm::vec3 p;
@@ -80,16 +91,16 @@ struct Sensor {
 std::array<Sensor, 4> m_sensors;
 
 
-
 void Kart::update() {
 
-    btTransform t;
-    m_motion_state->getWorldTransform(t);
-    t.getOpenGLMatrix(reinterpret_cast<float*>(&m_model.transform));
+    btTransform transform;
+    m_motion_state->getWorldTransform(transform);
+    transform.getOpenGLMatrix(reinterpret_cast<float*>(&m_model.transform));
 
 
 
     // suspension
+    if (0)
     for (int i = 0; i < 4; ++i) {
         Sensor& s = m_sensors[i];
 
@@ -118,21 +129,21 @@ void Kart::update() {
 //            float v = glm::dot(vel, n);
 
             float f = 1 - cb.m_closestHitFraction;
-            m_rigid_body->applyForce(to_bt(n) * 150 * f, o - t.getOrigin());
+            m_rigid_body->applyForce(to_bt(n) * 150 * f, o - transform.getOrigin());
         }
     }
 
 
     // random impulse
-    const Uint8* ks = SDL_GetKeyboardState(nullptr);
-    bool q = !!ks[SDL_SCANCODE_RETURN];
     static bool old_q;
+    const Uint8* ks = SDL_GetKeyboardState(nullptr);
+    bool q = ks[SDL_SCANCODE_RETURN];
     if (q && !old_q) {
         LOG("impulse");
         auto randf = []() { return rand() / (float) RAND_MAX; };
-        glm::vec3 s = m_size * (glm::vec3(randf(), randf(), randf()) * 2.0f - glm::vec3(1));
+        glm::vec3 s = glm::vec3(randf(), randf(), randf()) * 2.0f - glm::vec3(1);
+        s *= m_size;
         m_rigid_body->applyImpulse(btVector3(0, 200, 0), btVector3(s.x, s.y, s.z));
-
     }
     old_q = q;
 
@@ -144,8 +155,14 @@ void Kart::update() {
     }
 
     m_rigid_body->applyTorque(
-            btVector3(0, (!!ks[SDL_SCANCODE_C] - ks[SDL_SCANCODE_V]) * 100, 0));
+            btVector3(0, (ks[SDL_SCANCODE_C] - ks[SDL_SCANCODE_V]) * 100, 0));
 
+    {
+        int d = ks[SDL_SCANCODE_PERIOD] - ks[SDL_SCANCODE_COMMA];
+        glm::vec3 p = glm::vec3(m_model.transform * glm::vec4(m_pick_pos, 1));
+        m_rigid_body->applyForce(btVector3(0, d * 200, 0),
+                                 to_bt(p) - transform.getOrigin());
+    }
 }
 
 
@@ -169,6 +186,17 @@ void Kart::debug_draw() {
         renderer3D.set_color(255, 0, 0);
         renderer3D.point(s.p);
     }
+
+
+    glm::vec3 p1 = glm::vec3(m_model.transform * glm::vec4(m_pick_pos, 1));
+    glm::vec3 p2 = glm::vec3(m_model.transform *
+            glm::vec4(m_pick_pos + m_pick_normal * 0.1f, 1));
+
+    renderer3D.set_color(255, 200, 0);
+    renderer3D.line(p1, p2);
+    renderer3D.set_color(0, 255, 0);
+    renderer3D.point(p1);
+
 }
 
 

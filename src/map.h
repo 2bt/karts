@@ -21,7 +21,7 @@ struct Model {
 class GameObject {
 public:
     const Model& get_model() const { return m_model; }
-    void pick(const glm::vec3& pos, const glm::vec3& normal) {}
+    virtual void pick(const glm::vec3& pos, const glm::vec3& normal) {}
 
 protected:
     Model m_model;
@@ -46,6 +46,7 @@ public:
     void update();
     void tick();
     void debug_draw();
+    void pick(const glm::vec3& pos, const glm::vec3& normal) override;
 
 private:
     glm::vec3                             m_size;
