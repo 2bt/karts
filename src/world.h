@@ -49,7 +49,7 @@ private:
 
 
     // physics stuff
-    static void update(btDynamicsWorld* world, float dt) {
+    static void tick(btDynamicsWorld* world, float dt) {
         static_cast<World*>(world->getWorldUserInfo())->tick();
     }
     void tick();

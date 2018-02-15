@@ -48,9 +48,9 @@ void Kart::init(btDynamicsWorld* world) {
     m_model.color = { 1.0, 0.7, 0.6 };
 
     // physics
-
     for (auto& v : mesh.vertices) m_size = glm::max(m_size, v.p);
     m_shape = std::make_unique<btBoxShape>(btVector3(m_size.x, m_size.y, m_size.z));
+
 
     float mass = 100;
     btVector3 inertia;
@@ -68,7 +68,7 @@ void Kart::init(btDynamicsWorld* world) {
     m_world->addRigidBody(m_rigid_body.get());
 
     m_rigid_body->setActivationState(DISABLE_DEACTIVATION);
-    m_rigid_body->setDamping(0.1, 0.1);
+    m_rigid_body->setDamping(0.2, 0.2);
     m_rigid_body->setUserPointer(this);
 }
 
@@ -93,14 +93,13 @@ std::array<Sensor, 4> m_sensors;
 
 void Kart::update() {
 
-    btTransform transform;
-    m_motion_state->getWorldTransform(transform);
-    transform.getOpenGLMatrix(reinterpret_cast<float*>(&m_model.transform));
+    btTransform trans;
+    m_motion_state->getWorldTransform(trans);
+    trans.getOpenGLMatrix(reinterpret_cast<float*>(&m_model.transform));
 
 
 
     // suspension
-    if (0)
     for (int i = 0; i < 4; ++i) {
         Sensor& s = m_sensors[i];
 
@@ -129,7 +128,7 @@ void Kart::update() {
 //            float v = glm::dot(vel, n);
 
             float f = 1 - cb.m_closestHitFraction;
-            m_rigid_body->applyForce(to_bt(n) * 150 * f, o - transform.getOrigin());
+            m_rigid_body->applyForce(to_bt(n) * 150 * f, o - trans.getOrigin());
         }
     }
 
@@ -161,7 +160,7 @@ void Kart::update() {
         int d = ks[SDL_SCANCODE_PERIOD] - ks[SDL_SCANCODE_COMMA];
         glm::vec3 p = glm::vec3(m_model.transform * glm::vec4(m_pick_pos, 1));
         m_rigid_body->applyForce(btVector3(0, d * 200, 0),
-                                 to_bt(p) - transform.getOrigin());
+                                 to_bt(p) - trans.getOrigin());
     }
 }
 
