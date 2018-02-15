@@ -280,177 +280,177 @@ void World::render_models() {
 
 
 class Gui {
-    public:
-        using Vec = glm::i16vec2;
-        using Col = glm::u8vec4;
+public:
+    using Vec = glm::i16vec2;
+    using Col = glm::u8vec4;
 
-        void init() {
-            m_texture = rmw::context.create_texture_2D("assets/gui.png", rmw::FilterMode::Nearest);
-            m_shader = rmw::context.create_shader(
-            R"(#version 100
-            attribute vec2 a_pos;
-            attribute vec2 a_uv;
-            attribute vec4 a_col;
-            varying vec2 v_uv;
-            varying vec4 v_col;
-            uniform vec2 scale;
-            uniform vec2 texture_scale;
-            void main() {
-                v_uv = a_uv * texture_scale;
-                v_col = a_col;
-                gl_Position = vec4(vec2(2.0, -2.0) * scale * a_pos + vec2(-1.0, 1.0), 0.0, 1.0);
-            })",
-            R"(#version 100
-            precision mediump float;
-            uniform sampler2D texture;
-            varying vec2 v_uv;
-            varying vec4 v_col;
-            void main() {
-                gl_FragColor = v_col * texture2D(texture, v_uv);
-            })");
-            m_shader->set_uniform("texture", m_texture);
-            m_shader->set_uniform("texture_scale", glm::vec2(1.0f / m_texture->get_width(),
-                        1.0f / m_texture->get_height()));
-            m_vb = rmw::context.create_vertex_buffer(rmw::BufferHint::StreamDraw);
-            m_va = rmw::context.create_vertex_array();
-            m_va->set_primitive_type(rmw::PrimitiveType::Triangles);
-            m_va->set_attribute(0, m_vb, rmw::ComponentType::Int16, 2, false, 0, 12);
-            m_va->set_attribute(1, m_vb, rmw::ComponentType::Int16, 2, false, 4, 12);
-            m_va->set_attribute(2, m_vb, rmw::ComponentType::Uint8, 4, true,  8, 12);
+    void init() {
+        m_texture = rmw::context.create_texture_2D("assets/gui.png", rmw::FilterMode::Nearest);
+        m_shader = rmw::context.create_shader(
+        R"(#version 100
+        attribute vec2 a_pos;
+        attribute vec2 a_uv;
+        attribute vec4 a_col;
+        varying vec2 v_uv;
+        varying vec4 v_col;
+        uniform vec2 scale;
+        uniform vec2 texture_scale;
+        void main() {
+            v_uv = a_uv * texture_scale;
+            v_col = a_col;
+            gl_Position = vec4(vec2(2.0, -2.0) * scale * a_pos + vec2(-1.0, 1.0), 0.0, 1.0);
+        })",
+        R"(#version 100
+        precision mediump float;
+        uniform sampler2D texture;
+        varying vec2 v_uv;
+        varying vec4 v_col;
+        void main() {
+            gl_FragColor = v_col * texture2D(texture, v_uv);
+        })");
+        m_shader->set_uniform("texture", m_texture);
+        m_shader->set_uniform("texture_scale", glm::vec2(1.0f / m_texture->get_width(),
+                    1.0f / m_texture->get_height()));
+        m_vb = rmw::context.create_vertex_buffer(rmw::BufferHint::StreamDraw);
+        m_va = rmw::context.create_vertex_array();
+        m_va->set_primitive_type(rmw::PrimitiveType::Triangles);
+        m_va->set_attribute(0, m_vb, rmw::ComponentType::Int16, 2, false, 0, 12);
+        m_va->set_attribute(1, m_vb, rmw::ComponentType::Int16, 2, false, 4, 12);
+        m_va->set_attribute(2, m_vb, rmw::ComponentType::Uint8, 4, true,  8, 12);
+    }
+
+    void begin_win(const char* name) {
+        Window* w = find_win(name);
+        if (!w) w = create_win(name);
+        m_win_stack.emplace_back(w);
+
+        w->cursor_pos = w->pos;
+
+        draw_rect(w->pos, w->size, style.window_color);
+    }
+    void end_win() {
+        Window* w = m_win_stack.back();
+        w->size.y = w->cursor_pos.y - w->pos.y;
+        m_win_stack.pop_back();
+    }
+    bool button(const char* label) {
+        Window* w = m_win_stack.back();
+        draw_rect(w->cursor_pos + Vec(2, 2), {96, 16}, style.button_color);
+        w->cursor_pos += Vec(0, 20);
+        return false;
+    }
+    void text(const char* label) {
+        Window* w = m_win_stack.back();
+
+        w->cursor_pos += Vec(0, 20);
+    }
+
+    void new_frame() {
+        m_vertices.clear();
+    }
+    void render() {
+        m_vb->init_data(m_vertices);
+        m_va->set_count(m_vertices.size());
+        m_shader->set_uniform("scale", glm::vec2(1.0f / rmw::context.get_width(),
+                    1.0f / rmw::context.get_height()));
+        rmw::RenderState rs;
+        rs.blend_enabled = true;
+        rs.blend_func_src_rgb = rmw::BlendFunc::SrcAlpha;
+        rs.blend_func_dst_rgb = rmw::BlendFunc::OneMinusSrcAlpha;
+        rmw::context.draw(rs, m_shader, m_va);
+    }
+
+    ~Gui() {
+        Window* w = m_win_head;
+        while (w) {
+            Window* o = w;
+            w = w->next;
+            delete o;
         }
-
-        void begin_win(const char* name) {
-            Window* w = find_win(name);
-            if (!w) w = create_win(name);
-            m_win_stack.emplace_back(w);
-
-            w->cursor_pos = w->pos;
-
-            draw_rect(w->pos, w->size, style.window_color);
-        }
-        void end_win() {
-            Window* w = m_win_stack.back();
-            w->size.y = w->cursor_pos.y - w->pos.y;
-            m_win_stack.pop_back();
-        }
-        bool button(const char* label) {
-            Window* w = m_win_stack.back();
-            draw_rect(w->cursor_pos + Vec(2, 2), {96, 16}, style.button_color);
-            w->cursor_pos += Vec(0, 20);
-            return false;
-        }
-        void text(const char* label) {
-            Window* w = m_win_stack.back();
-
-            w->cursor_pos += Vec(0, 20);
-        }
-
-        void new_frame() {
-            m_vertices.clear();
-        }
-        void render() {
-            m_vb->init_data(m_vertices);
-            m_va->set_count(m_vertices.size());
-            m_shader->set_uniform("scale", glm::vec2(1.0f / rmw::context.get_width(),
-                        1.0f / rmw::context.get_height()));
-            rmw::RenderState rs;
-            rs.blend_enabled = true;
-            rs.blend_func_src_rgb = rmw::BlendFunc::SrcAlpha;
-            rs.blend_func_dst_rgb = rmw::BlendFunc::OneMinusSrcAlpha;
-            rmw::context.draw(rs, m_shader, m_va);
-        }
-
-        ~Gui() {
-            Window* w = m_win_head;
-            while (w) {
-                Window* o = w;
-                w = w->next;
-                delete o;
-            }
-        }
+    }
 
 
-    private:
+private:
 
-        struct {
-            Col window_color = {100, 100, 100, 100};
-            Col button_color = {100, 130, 170, 255};
-        } const style;
+    struct {
+        Col window_color = {100, 100, 100, 100};
+        Col button_color = {100, 130, 170, 255};
+    } const style;
 
-        void draw_rect(const Vec& pos, const Vec& size, const Col& color) {
-            Vertex vs[] = {
-                { pos, {0, 0}, color },
-                { pos + Vec(0, size.y), {0, 1}, color },
-                { pos + Vec(size.x, 0), {1, 0}, color },
-                { pos + size, {1, 1}, color },
-            };
-            m_vertices.emplace_back(vs[0]);
-            m_vertices.emplace_back(vs[1]);
-            m_vertices.emplace_back(vs[2]);
-            m_vertices.emplace_back(vs[2]);
-            m_vertices.emplace_back(vs[1]);
-            m_vertices.emplace_back(vs[3]);
-        }
-        void draw_rect(const Vec& pos, const Vec& size, const Vec& uv, const Col& color) {
-            Vertex vs[] = {
-                { pos, uv, color },
-                { pos + Vec(0, size.y), uv + Vec(0, size.y), color },
-                { pos + Vec(size.x, 0), uv + Vec(size.x, 0), color },
-                { pos + size, uv + size, color },
-            };
-            m_vertices.emplace_back(vs[0]);
-            m_vertices.emplace_back(vs[1]);
-            m_vertices.emplace_back(vs[2]);
-            m_vertices.emplace_back(vs[2]);
-            m_vertices.emplace_back(vs[1]);
-            m_vertices.emplace_back(vs[3]);
-        }
-
-
-        struct Window {
-            Window*       next;
-            const char*   name;
-            Vec           pos;
-            Vec           size;
-
-            Vec           cursor_pos;
+    void draw_rect(const Vec& pos, const Vec& size, const Col& color) {
+        Vertex vs[] = {
+            { pos, {0, 0}, color },
+            { pos + Vec(0, size.y), {0, 1}, color },
+            { pos + Vec(size.x, 0), {1, 0}, color },
+            { pos + size, {1, 1}, color },
         };
-
-
-        Window* find_win(const char* name) {
-            Window* w = m_win_head;
-            while (w) {
-                if (strcmp(w->name, name) == 0) break;
-                w = w->next;
-            }
-            return w;
-        }
-        Window* create_win(const char* name) {
-            Window* w = new Window;
-            w->next = m_win_head;
-            m_win_head = w;
-            w->name = name;
-            w->pos = { 50, 50 };
-            w->size = { 100, 100 };
-            return w;
-        }
-
-
-        Window*                m_win_head = nullptr;
-        std::vector<Window*>   m_win_stack;
-
-        struct Vertex {
-            Vec pos;
-            Vec uv;
-            Col col;
+        m_vertices.emplace_back(vs[0]);
+        m_vertices.emplace_back(vs[1]);
+        m_vertices.emplace_back(vs[2]);
+        m_vertices.emplace_back(vs[2]);
+        m_vertices.emplace_back(vs[1]);
+        m_vertices.emplace_back(vs[3]);
+    }
+    void draw_rect(const Vec& pos, const Vec& size, const Vec& uv, const Col& color) {
+        Vertex vs[] = {
+            { pos, uv, color },
+            { pos + Vec(0, size.y), uv + Vec(0, size.y), color },
+            { pos + Vec(size.x, 0), uv + Vec(size.x, 0), color },
+            { pos + size, uv + size, color },
         };
+        m_vertices.emplace_back(vs[0]);
+        m_vertices.emplace_back(vs[1]);
+        m_vertices.emplace_back(vs[2]);
+        m_vertices.emplace_back(vs[2]);
+        m_vertices.emplace_back(vs[1]);
+        m_vertices.emplace_back(vs[3]);
+    }
 
-        std::vector<Vertex>    m_vertices;
 
-        rmw::Texture2D::Ptr    m_texture;
-        rmw::Shader::Ptr       m_shader;
-        rmw::VertexArray::Ptr  m_va;
-        rmw::VertexBuffer::Ptr m_vb;
+    struct Window {
+        Window*       next;
+        const char*   name;
+        Vec           pos;
+        Vec           size;
+
+        Vec           cursor_pos;
+    };
+
+
+    Window* find_win(const char* name) {
+        Window* w = m_win_head;
+        while (w) {
+            if (strcmp(w->name, name) == 0) break;
+            w = w->next;
+        }
+        return w;
+    }
+    Window* create_win(const char* name) {
+        Window* w = new Window;
+        w->next = m_win_head;
+        m_win_head = w;
+        w->name = name;
+        w->pos = { 50, 50 };
+        w->size = { 100, 100 };
+        return w;
+    }
+
+
+    Window*                m_win_head = nullptr;
+    std::vector<Window*>   m_win_stack;
+
+    struct Vertex {
+        Vec pos;
+        Vec uv;
+        Col col;
+    };
+
+    std::vector<Vertex>    m_vertices;
+
+    rmw::Texture2D::Ptr    m_texture;
+    rmw::Shader::Ptr       m_shader;
+    rmw::VertexArray::Ptr  m_va;
+    rmw::VertexBuffer::Ptr m_vb;
 
 };
 
@@ -466,6 +466,7 @@ void World::draw() {
 
 
     static int c = 0; if (!c++) gui.init();
+
     gui.new_frame();
 
     gui.begin_win("my test window");
