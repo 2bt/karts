@@ -85,7 +85,7 @@ constexpr uint32_t map_to_gl(CullFace cf) {
     return lut[static_cast<int>(cf)];
 }
 constexpr uint32_t map_to_gl(TextureFormat tf) {
-    const uint32_t lut[] = { GL_RGB, GL_RGBA, GL_DEPTH_COMPONENT, GL_STENCIL_INDEX, GL_DEPTH_STENCIL };
+    const uint32_t lut[] = { GL_RED, GL_RGB, GL_RGBA, GL_DEPTH_COMPONENT, GL_STENCIL_INDEX, GL_DEPTH_STENCIL };
     return lut[static_cast<int>(tf)];
 }
 
@@ -281,8 +281,10 @@ bool Texture2D::init(const char* filename, FilterMode filter) {
     return true;
 }
 bool Texture2D::init(SDL_Surface* s, FilterMode filter) {
-    return init(s->format->BytesPerPixel == 4 ? TextureFormat::RGBA : TextureFormat::RGB,
-                s->w, s->h, s->pixels, filter);
+    TextureFormat f = s->format->BytesPerPixel == 1 ? TextureFormat::Red
+                    : s->format->BytesPerPixel == 3 ? TextureFormat::RGB
+                                                    : TextureFormat::RGBA;
+    return init(f, s->w, s->h, s->pixels, filter);
 }
 bool Texture2D::init(TextureFormat format, int w, int h, void* data, FilterMode filter) {
     //printf("error %d\n", glGetError());

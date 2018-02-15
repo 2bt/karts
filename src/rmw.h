@@ -168,7 +168,7 @@ private:
 
 //enum class WrapMode { Clamp, Repeat, ClampZero, MirrowedRepeat };
 enum class FilterMode { Nearest, Linear, Trilinear };
-enum class TextureFormat { RGB, RGBA, Depth, Stencil, DepthStencil };
+enum class TextureFormat { Red, RGB, RGBA, Depth, Stencil, DepthStencil };
 
 
 class Texture2D {

@@ -306,7 +306,7 @@ public:
         varying vec2 v_uv;
         varying vec4 v_col;
         void main() {
-            gl_FragColor = v_col * texture2D(texture, v_uv);
+            gl_FragColor = v_col * vec4(1.0, 1.0, 1.0, texture2D(texture, v_uv).r);
         })");
         m_shader->set_uniform("texture", m_texture);
         m_shader->set_uniform("texture_scale", glm::vec2(1.0f / m_texture->get_width(),
@@ -335,7 +335,7 @@ public:
     }
     bool button(const char* label) {
         Window* w = m_win_stack.back();
-        draw_rect(w->cursor_pos + Vec(2, 2), {96, 16}, style.button_color);
+        draw_rect(w->cursor_pos + Vec(2, 2), {96, 16}, {}, style.button_color);
         w->cursor_pos += Vec(0, 20);
         return false;
     }
