@@ -6,6 +6,7 @@
 
 namespace rmw {
 
+
 namespace {
 
 // opengl functions with caching
@@ -87,8 +88,6 @@ constexpr uint32_t map_to_gl(TextureFormat tf) {
     const uint32_t lut[] = { GL_RGB, GL_RGBA, GL_DEPTH_COMPONENT, GL_STENCIL_INDEX, GL_DEPTH_STENCIL };
     return lut[static_cast<int>(tf)];
 }
-
-
 
 
 VertexArray::VertexArray() {
@@ -394,12 +393,12 @@ bool Context::init(int width, int height, const char* title) {
     glewExperimental = true;
     glewInit();
 
-    glEnable(GL_PROGRAM_POINT_SIZE);
-
     // initialize the reder state according to opengl's initial state
     m_render_state.cull_face_enabled = false;
     m_render_state.depth_test_enabled = false;
     m_render_state.depth_test_func = DepthTestFunc::Less;
+
+    glEnable(GL_PROGRAM_POINT_SIZE);
 
     return true;
 }
@@ -459,6 +458,27 @@ void Context::sync_render_state(const RenderState& rs) {
         }
     }
 
+    // depth
+    if (m_render_state.scissor_test_enabled != rs.scissor_test_enabled) {
+        m_render_state.scissor_test_enabled = rs.scissor_test_enabled;
+        if (m_render_state.scissor_test_enabled) glEnable(GL_SCISSOR_TEST);
+        else glDisable(GL_SCISSOR_TEST);
+    }
+    if (m_render_state.scissor_test_enabled) {
+        if (m_render_state.scissor_box.x != rs.scissor_box.x ||
+            m_render_state.scissor_box.y != rs.scissor_box.y ||
+            m_render_state.scissor_box.w != rs.scissor_box.w ||
+            m_render_state.scissor_box.h != rs.scissor_box.h)
+        {
+            m_render_state.scissor_box = rs.scissor_box;
+            glScissor(m_render_state.scissor_box.x,
+                      m_render_state.scissor_box.y,
+                      m_render_state.scissor_box.w,
+                      m_render_state.scissor_box.h);
+        }
+    }
+
+
     // blend
     if (m_render_state.blend_enabled != rs.blend_enabled) {
         m_render_state.blend_enabled = rs.blend_enabled;
@@ -466,10 +486,10 @@ void Context::sync_render_state(const RenderState& rs) {
         else glDisable(GL_BLEND);
     }
     if (m_render_state.blend_enabled) {
-        if ( m_render_state.blend_func_src_rgb != rs.blend_func_src_rgb
-        || m_render_state.blend_func_src_alpha != rs.blend_func_src_alpha
-        || m_render_state.blend_func_dst_rgb != rs.blend_func_dst_rgb
-        || m_render_state.blend_func_dst_alpha != rs.blend_func_dst_alpha)
+        if (m_render_state.blend_func_src_rgb != rs.blend_func_src_rgb ||
+            m_render_state.blend_func_src_alpha != rs.blend_func_src_alpha ||
+            m_render_state.blend_func_dst_rgb != rs.blend_func_dst_rgb ||
+            m_render_state.blend_func_dst_alpha != rs.blend_func_dst_alpha)
         {
             m_render_state.blend_func_src_rgb   = rs.blend_func_src_rgb;
             m_render_state.blend_func_src_alpha = rs.blend_func_src_alpha;
@@ -480,8 +500,8 @@ void Context::sync_render_state(const RenderState& rs) {
                                 map_to_gl(m_render_state.blend_func_src_alpha),
                                 map_to_gl(m_render_state.blend_func_dst_alpha));
         }
-        if (m_render_state.blend_equation_rgb != rs.blend_equation_rgb
-        || m_render_state.blend_equation_alpha != rs.blend_equation_alpha)
+        if (m_render_state.blend_equation_rgb != rs.blend_equation_rgb ||
+            m_render_state.blend_equation_alpha != rs.blend_equation_alpha)
         {
             m_render_state.blend_equation_rgb = rs.blend_equation_rgb;
             m_render_state.blend_equation_alpha = rs.blend_equation_alpha;
@@ -505,13 +525,13 @@ void Context::draw(const RenderState& rs, const Shader::Ptr& shader, const Verte
     sync_render_state(rs);
 
     // only consider RenderState::viewport if it's valid
-    Viewport vp;
+    Rect vp = {0, 0, 0, 0};
     if (rs.viewport.w != 0) vp = rs.viewport;
     else {
         vp.w = fb->m_width;
         vp.h = fb->m_height;
     }
-    if (memcmp(&m_render_state.viewport, &vp, sizeof(Viewport)) != 0) {
+    if (memcmp(&m_render_state.viewport, &vp, sizeof(Rect)) != 0) {
         m_render_state.viewport = vp;
         glViewport(m_render_state.viewport.x,
                    m_render_state.viewport.y,
@@ -552,7 +572,7 @@ void Context::flip_buffers() const {
 
 
 
-rmw::Context context;
+Context context;
 
 
-}
+} // namespace

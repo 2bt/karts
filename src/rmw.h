@@ -15,12 +15,7 @@ namespace rmw {
 
 // render state
 
-struct Viewport {
-    int x = 0;
-    int y = 0;
-    int w = 0;
-    int h = 0;
-};
+struct Rect { int x, y, w, h; };
 
 enum class DepthTestFunc { Never, Less, Equal, LEqual };
 
@@ -37,7 +32,7 @@ enum class BlendEquation { Add, Subtract, ReverseSubtract };
 
 
 struct RenderState {
-    Viewport      viewport;
+    Rect          viewport                = {0, 0, 0, 0};
 
     // depth
     bool          depth_test_enabled      = false;
@@ -46,6 +41,10 @@ struct RenderState {
     // cull face
     bool          cull_face_enabled       = true;
     CullFace      cull_face               = CullFace::Back;
+
+    // scissor
+    bool          scissor_test_enabled    = false;
+    Rect          scissor_box             = {0, 0, 0, 0};
 
     // blend
     bool          blend_enabled           = false;
@@ -396,7 +395,7 @@ private:
 };
 
 
-extern rmw::Context context;
+extern Context context;
 
 
-}
+} // namespace
