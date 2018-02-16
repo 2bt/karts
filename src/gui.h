@@ -5,14 +5,20 @@
 
 namespace gui {
 
+    using Vec = glm::i16vec2;
+    using Col = glm::u8vec4;
+
     void init();
     void kill();
 
     void new_frame();
     void render();
+
+    void set_next_window_pos(const Vec& pos);
     void begin_window(const char* name);
     void end_window();
+
     bool button(const char* label);
-    void text(const char* label);
+    void text(const char* fmt, ...);
 
 }

@@ -3,14 +3,11 @@
 #include "rmw.h"
 #include "log.h"
 #include <algorithm>
+#include <cstdarg>
 
 
 namespace gui {
 namespace {
-
-
-using Vec = glm::i16vec2;
-using Col = glm::u8vec4;
 
 
 enum {
@@ -35,6 +32,7 @@ struct Rect {
     Vec br() const { return max; }
     Vec size() const { return max - min; }
     Rect expand(short d) const { return { min - Vec(d), max + Vec(d) }; }
+    Rect expand(const Vec& d) const { return { min - d, max + d }; }
     bool contains(const Vec& p) {
         return p.x >= min.x && p.y >= min.y &&
                p.x <  max.x && p.y <  max.y;
@@ -176,7 +174,7 @@ const char*                          m_item_active;
 const char*                          m_item_hovered;
 const char*                          m_old_item_hovered;
 
-Vec                                  m_window_spawn_pos = { 10, 10 };
+Vec                                  m_window_spawn_pos = { 5, 5 };
 std::vector<std::unique_ptr<Window>> m_windows;
 std::vector<Window*>                 m_window_stack;
 Window*                              m_window_active;
@@ -346,6 +344,11 @@ void render() {
 }
 
 
+void set_next_window_pos(const Vec& pos) {
+    m_window_spawn_pos = pos;
+}
+
+
 void begin_window(const char* name) {
     Window* w = find_or_create_window(name);
     m_window_stack.emplace_back(w);
@@ -380,9 +383,9 @@ void end_window() {
 bool button(const char* label) {
     Window* w = m_window_stack.back();
     Vec s = get_text_size(label);
-    Rect rect = { w->cursor_pos, w->cursor_pos + s + Vec(12) };
+    Rect rect = { w->cursor_pos, w->cursor_pos + s + Vec(12, 16) };
 
-    Rect bb = rect.expand(-2);
+    Rect bb = rect.expand({ -2, -4 });
     bool hovered = w == m_window_hovered && bb.contains(m_mouse_pos);
     if (hovered) m_item_hovered = label;
     bool clicked = hovered && m_mouse_buttons_clicked[0];
@@ -398,7 +401,7 @@ bool button(const char* label) {
                           m_colors.button;
 
     w->dc.draw_rect(bb, color, RECT_FILL_ROUND_1);
-    w->dc.draw_text(bb.min + Vec(4), label);
+    w->dc.draw_text(bb.min + Vec(4, 4), label);
 
     w->cursor_pos.y = rect.max.y;
     w->content_rect.max = max(w->content_rect.max, rect.max);
@@ -407,12 +410,18 @@ bool button(const char* label) {
 }
 
 
-void text(const char* label) {
+void text(const char* fmt, ...) {
+    static std::array<char, 1024> buffer;
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buffer.data(), buffer.size(), fmt, args);
+    va_end(args);
+
     Window* w = m_window_stack.back();
-    Vec s = get_text_size(label);
+    Vec s = get_text_size(buffer.data());
     Rect rect = { w->cursor_pos, w->cursor_pos + s + Vec(4) };
 
-    w->dc.draw_text(rect.min + Vec(2), label);
+    w->dc.draw_text(rect.min + Vec(2), buffer.data());
 
     w->cursor_pos.y = rect.max.y;
     w->content_rect.max = max(w->content_rect.max, rect.max);

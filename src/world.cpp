@@ -302,9 +302,13 @@ void World::draw() {
     gui::text("some text\nthat spawns over multiple lines");
 
     {
+        gui::set_next_window_pos({ 300, 5 });
         gui::begin_window("win2");
         gui::button("button 2.1");
         gui::button("button 2.2");
+        gui::text("camera:\n%7.3f %7.3f\n%7.3f %7.3f %7.3f", m_camera.ang_x, m_camera.ang_y,
+                  m_camera.pos.x, m_camera.pos.y, m_camera.pos.z);
+        gui::button("button 2.3");
         gui::end_window();
     }
 
