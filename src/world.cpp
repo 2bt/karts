@@ -263,8 +263,10 @@ void World::render_models() {
 
 
     auto draw = [&](const Model& model) {
-        m_model_shader->set_uniform("normal_mat", glm::transpose(glm::inverse(glm::mat3(model.transform))));
-        m_model_shader->set_uniform("biased_shadow_mvp_mat", biased_shadow_vp_mat * model.transform);
+        glm::mat3 normal_mat = glm::transpose(glm::inverse(glm::mat3(model.transform)));
+        glm::mat4 biased_shadow_mvp_mat = biased_shadow_vp_mat * model.transform;
+        m_model_shader->set_uniform("normal_mat", normal_mat);
+        m_model_shader->set_uniform("biased_shadow_mvp_mat", biased_shadow_mvp_mat);
         m_model_shader->set_uniform("model_mat", model.transform);
         m_model_shader->set_uniform("mvp_mat", m_camera.vp_mat * model.transform);
         m_model_shader->set_uniform("color", model.color);
@@ -324,34 +326,49 @@ public:
         Window* w = find_win(name);
         if (!w) w = create_win(name);
         m_win_stack.emplace_back(w);
-        w->cursor_pos = w->pos;
-        Rect rect = { w->pos, w->size };
-        draw_rect(rect, style.window_color, RECT_FILL_ROUND_1);
+        draw_rect(w->rect, m_colors.window, RECT_FILL_ROUND_1);
+        w->cursor_pos = w->rect.min + Vec(4);
+        w->content_rect.min = w->cursor_pos;
+        w->content_rect.max = w->cursor_pos;
     }
     void end_win() {
         Window* w = m_win_stack.back();
-        w->size.y = w->cursor_pos.y - w->pos.y;
+        w->rect.max = w->content_rect.max + Vec(4);
         m_win_stack.pop_back();
     }
     bool button(const char* label) {
         Window* w = m_win_stack.back();
         Vec s = get_text_size(label);
+        Rect rect = { w->cursor_pos, w->cursor_pos + s + Vec(12) };
 
-        Rect rect = { w->cursor_pos + Vec(2), s + Vec(8) };
-        draw_rect(rect, style.button_color, RECT_FILL_ROUND_1);
-        draw_text(w->cursor_pos + Vec(6), label);
+        Rect bb = rect.expand(-2);
+        bool hovered = bb.contains(m_mouse_pos);
+        Col color = hovered ? m_colors.button_hovered :
+                              m_colors.button;
+        draw_rect(bb, color, RECT_FILL_ROUND_1);
+        draw_text(bb.min + Vec(4), label);
 
-        w->cursor_pos += Vec(0, s.y + 12);
+        w->cursor_pos.y = rect.max.y;
+        w->content_rect.max = max(w->content_rect.max, rect.max);
         return false;
     }
     void text(const char* label) {
         Window* w = m_win_stack.back();
+        Vec s = get_text_size(label);
+        Rect rect = { w->cursor_pos, w->cursor_pos + s + Vec(4) };
 
-        w->cursor_pos += Vec(0, 20);
+        draw_text(rect.min + Vec(2), label);
+
+        w->cursor_pos.y = rect.max.y;
+        w->content_rect.max = max(w->content_rect.max, rect.max);
     }
 
     void new_frame() {
         m_vertices.clear();
+        int x, y;
+        m_mouse_buttons = SDL_GetMouseState(&x, &y);
+        m_mouse_pos = { x, y };
+        m_hover_item = nullptr;
     }
     void render() {
         m_vb->init_data(m_vertices);
@@ -379,9 +396,11 @@ public:
 private:
 
     struct {
-        Col window_color = { 100, 100, 100, 200 };
-        Col button_color = { 100, 130, 170, 255 };
-    } const style;
+        Col window         = { 100, 100, 100, 200 };
+        Col button         = { 100, 130, 170, 255 };
+        Col button_hovered = { 140, 130, 170, 255 };
+        Col button_active  = { 180, 130, 170, 255 };
+    } const m_colors;
 
     enum {
         FONT_WIDTH  = 7,
@@ -396,12 +415,17 @@ private:
 
     struct Rect {
         Rect() {}
-        Rect(const Vec& pos, const Vec& size) : min(pos), max(pos + size) {}
+        Rect(const Vec& min, const Vec& max) : min(min), max(max) {}
         Vec tl() const { return min; }
         Vec tr() const { return Vec(max.x, min.y); }
         Vec bl() const { return Vec(min.x, max.y); }
         Vec br() const { return max; }
         Vec size() const { return max - min; }
+        Rect expand(short d) const { return { min - Vec(d), max + Vec(d) }; }
+        bool contains(const Vec& p) {
+            return p.x >= min.x && p.y >= min.y &&
+                   p.x <  max.x && p.y <  max.y;
+        }
 
         Vec min;
         Vec max;
@@ -513,7 +537,7 @@ private:
             }
             if (c > 32 || c < 128) {
                 Vec uv = { c % 16 * FONT_WIDTH, c / 16 * FONT_HEIGHT };
-                Rect rect = { p, Vec(FONT_WIDTH, FONT_HEIGHT) };
+                Rect rect = { p, p + Vec(FONT_WIDTH, FONT_HEIGHT) };
                 draw_rect(rect, { 255, 255, 255, 255 }, uv);
             }
             p.x += FONT_WIDTH;
@@ -523,10 +547,11 @@ private:
     struct Window {
         Window*       next;
         const char*   name;
-        Vec           pos;
-        Vec           size;
+
+        Rect          rect;
 
         Vec           cursor_pos;
+        Rect          content_rect;
     };
 
 
@@ -543,11 +568,13 @@ private:
         w->next = m_win_head;
         m_win_head = w;
         w->name = name;
-        w->pos = { 50, 50 };
-        w->size = { 200, 200 };
+        w->rect = { { 50, 50 }, { 200, 200 } };
         return w;
     }
 
+    Vec                    m_mouse_pos;
+    Uint32                 m_mouse_buttons;
+    const char*            m_hover_item;
 
     Window*                m_win_head = nullptr;
     std::vector<Window*>   m_win_stack;
@@ -580,7 +607,9 @@ void World::draw() {
     if (gui.button("click me!")) puts("button was clicked");
     gui.text("hallo");
     gui.text("some text");
+    gui.text("some text\nthat spawns over multiple lines");
     gui.button("another button\nbut this one is\nbigger!");
+    gui.button("clicky");
     gui.text("some more text");
     gui.end_win();
 
