@@ -298,7 +298,8 @@ public:
         void main() {
             v_uv = a_uv * texture_scale;
             v_col = a_col;
-            gl_Position = vec4(vec2(2.0, -2.0) * scale * a_pos + vec2(-1.0, 1.0), 0.0, 1.0);
+            gl_Position = vec4(vec2(2.0, -2.0) * scale * a_pos +
+                               vec2(-1.0, 1.0), 0.0, 1.0);
         })",
         R"(#version 100
         precision mediump float;
@@ -325,8 +326,8 @@ public:
         m_win_stack.emplace_back(w);
 
         w->cursor_pos = w->pos;
-
-        draw_rect(w->pos, w->size, style.window_color);
+        Rect rect = { w->pos, w->pos + w->size };
+        draw_rect(rect, style.window_color, RECT_FILL_ROUND_1);
     }
     void end_win() {
         Window* w = m_win_stack.back();
@@ -335,7 +336,9 @@ public:
     }
     bool button(const char* label) {
         Window* w = m_win_stack.back();
-        draw_rect(w->cursor_pos + Vec(2, 2), {96, 16}, {}, style.button_color);
+        Rect rect = { w->cursor_pos + Vec(2, 2),
+                      w->cursor_pos + Vec(98, 18) };
+        draw_rect(rect, style.button_color, RECT_FILL_ROUND_1);
         w->cursor_pos += Vec(0, 20);
         return false;
     }
@@ -351,8 +354,9 @@ public:
     void render() {
         m_vb->init_data(m_vertices);
         m_va->set_count(m_vertices.size());
-        m_shader->set_uniform("scale", glm::vec2(1.0f / rmw::context.get_width(),
-                    1.0f / rmw::context.get_height()));
+        glm::vec2 scale = { 1.0f / rmw::context.get_width(),
+                            1.0f / rmw::context.get_height() };
+        m_shader->set_uniform("scale", scale);
         rmw::RenderState rs;
         rs.blend_enabled = true;
         rs.blend_func_src_rgb = rmw::BlendFunc::SrcAlpha;
@@ -373,39 +377,112 @@ public:
 private:
 
     struct {
-        Col window_color = {100, 100, 100, 100};
-        Col button_color = {100, 130, 170, 255};
+        Col window_color = { 100, 100, 100, 200 };
+        Col button_color = { 100, 130, 170, 255 };
     } const style;
 
-    void draw_rect(const Vec& pos, const Vec& size, const Col& color) {
-        Vertex vs[] = {
-            { pos, {0, 0}, color },
-            { pos + Vec(0, size.y), {0, 1}, color },
-            { pos + Vec(size.x, 0), {1, 0}, color },
-            { pos + size, {1, 1}, color },
-        };
-        m_vertices.emplace_back(vs[0]);
-        m_vertices.emplace_back(vs[1]);
-        m_vertices.emplace_back(vs[2]);
-        m_vertices.emplace_back(vs[2]);
-        m_vertices.emplace_back(vs[1]);
-        m_vertices.emplace_back(vs[3]);
-    }
-    void draw_rect(const Vec& pos, const Vec& size, const Vec& uv, const Col& color) {
-        Vertex vs[] = {
-            { pos, uv, color },
-            { pos + Vec(0, size.y), uv + Vec(0, size.y), color },
-            { pos + Vec(size.x, 0), uv + Vec(size.x, 0), color },
-            { pos + size, uv + size, color },
-        };
-        m_vertices.emplace_back(vs[0]);
-        m_vertices.emplace_back(vs[1]);
-        m_vertices.emplace_back(vs[2]);
-        m_vertices.emplace_back(vs[2]);
-        m_vertices.emplace_back(vs[1]);
-        m_vertices.emplace_back(vs[3]);
+    enum {
+        FONT_WIDTH  = 7,
+        FONT_HEIGHT = 12,
+    };
+
+    struct Vertex {
+        Vec pos;
+        Vec uv;
+        Col col;
+    };
+
+    struct Rect {
+        Vec min;
+        Vec max;
+
+        Vec tl() const { return min; }
+        Vec tr() const { return Vec(max.x, min.y); }
+        Vec bl() const { return Vec(min.x, max.y); }
+        Vec br() const { return max; }
+        Vec size() const { return max - min; }
+    };
+
+    void draw_quad(const Vertex& v0,
+                   const Vertex& v1,
+                   const Vertex& v2,
+                   const Vertex& v3)
+    {
+        m_vertices.emplace_back(v0);
+        m_vertices.emplace_back(v1);
+        m_vertices.emplace_back(v2);
+        m_vertices.emplace_back(v2);
+        m_vertices.emplace_back(v1);
+        m_vertices.emplace_back(v3);
     }
 
+    void draw_rect(const Rect& rect, const Col& color) {
+        Vertex vs[] = {
+            { rect.tl(), {0, 0}, color },
+            { rect.bl(), {0, 1}, color },
+            { rect.tr(), {1, 0}, color },
+            { rect.br(), {1, 1}, color },
+        };
+        draw_quad(vs[0], vs[1], vs[2], vs[3]);
+    }
+    void draw_rect(const Rect& rect, const Vec& uv, const Col& color) {
+        Vec s = rect.size();
+        Vertex vs[] = {
+            { rect.tl(), uv, color },
+            { rect.bl(), uv + Vec(0, s.y), color },
+            { rect.tr(), uv + Vec(s.x, 0), color },
+            { rect.br(), uv + s, color },
+        };
+        draw_quad(vs[0], vs[1], vs[2], vs[3]);
+    }
+
+    enum RectStyle {
+        RECT_FILL,
+        RECT_FILL_ROUND_1,
+        RECT_FILL_ROUND_2,
+        RECT_FILL_ROUND_3,
+        RECT_STROKE,
+        RECT_STROKE_ROUND_1,
+        RECT_STROKE_ROUND_2,
+        RECT_STROKE_ROUND_3,
+    };
+
+    void draw_rect(const Rect& rect, const Col& color, RectStyle style) {
+        if (style == 0) {
+            draw_rect(rect, color);
+            return;
+        }
+        Vec o = { 16 * style, 0 };
+        Vec u = { 7, 0 };
+        Vec v = { 0, 7 };
+        Vertex vs[] = {
+            { rect.tl(),     o,     color },
+            { rect.tl() + v, o + v, color },
+            { rect.bl() - v, o + v, color },
+            { rect.bl(),     o,     color },
+            { rect.tl() + u,     o + u,     color },
+            { rect.tl() + u + v, o + u + v, color },
+            { rect.bl() + u - v, o + u + v, color },
+            { rect.bl() + u,     o + u,     color },
+            { rect.tr() - u,     o + u,     color },
+            { rect.tr() - u + v, o + u + v, color },
+            { rect.br() - u - v, o + u + v, color },
+            { rect.br() - u,     o + u,     color },
+            { rect.tr(),     o,     color },
+            { rect.tr() + v, o + v, color },
+            { rect.br() - v, o + v, color },
+            { rect.br(),     o,     color },
+        };
+        draw_quad(vs[0], vs[1], vs[4], vs[5]);
+        draw_quad(vs[1], vs[2], vs[5], vs[6]);
+        draw_quad(vs[2], vs[3], vs[6], vs[7]);
+        draw_quad(vs[4], vs[5], vs[8], vs[9]);
+        if (style < RECT_STROKE) draw_quad(vs[5], vs[6], vs[9], vs[10]);
+        draw_quad(vs[6], vs[7], vs[10], vs[11]);
+        draw_quad(vs[8], vs[9], vs[12], vs[13]);
+        draw_quad(vs[9], vs[10], vs[13], vs[14]);
+        draw_quad(vs[10], vs[11], vs[14], vs[15]);
+    }
 
     struct Window {
         Window*       next;
@@ -439,12 +516,6 @@ private:
     Window*                m_win_head = nullptr;
     std::vector<Window*>   m_win_stack;
 
-    struct Vertex {
-        Vec pos;
-        Vec uv;
-        Col col;
-    };
-
     std::vector<Vertex>    m_vertices;
 
     rmw::Texture2D::Ptr    m_texture;
@@ -472,7 +543,9 @@ void World::draw() {
     gui.begin_win("my test window");
     if (gui.button("click me!")) puts("button was clicked");
     gui.text("hallo");
+    gui.text("some text");
     gui.button("another button");
+    gui.text("some more text");
     gui.end_win();
 
     gui.render();
