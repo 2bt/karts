@@ -290,35 +290,6 @@ void World::draw() {
 
     render_models();
 
-
-    static int c = 0; if (!c++) gui::init();
-
-    gui::new_frame();
-
-    gui::begin_window("my test window");
-    if (gui::button("click me!")) puts("button was clicked");
-    gui::text("hallo");
-    gui::text("some text");
-    gui::text("some text\nthat spawns over multiple lines");
-
-    {
-        gui::set_next_window_pos({ 300, 5 });
-        gui::begin_window("win2");
-        gui::button("button 2.1");
-        gui::button("button 2.2");
-        gui::text("camera:\n%7.3f %7.3f\n%7.3f %7.3f %7.3f", m_camera.ang_x, m_camera.ang_y,
-                  m_camera.pos.x, m_camera.pos.y, m_camera.pos.z);
-        gui::button("button 2.3");
-        gui::end_window();
-    }
-
-    gui::button("another button\nbut this one is\nbigger!");
-    gui::button("clicky");
-    gui::text("some more text");
-    gui::end_window();
-
-    gui::render();
-
     // debug render shadow map
 //    {
 //        auto vb = rmw::context.create_vertex_buffer(rmw::BufferHint::StreamDraw);
@@ -378,4 +349,40 @@ void World::draw() {
 //    }
 
     renderer3D.flush();
+
+    // some test gui
+    {
+        static int c = 0; if (!c++) gui::init();
+        gui::new_frame();
+
+        gui::begin_window("my test window");
+        gui::text("hallo");
+        if (gui::button("click me!")) puts("button was clicked");
+        gui::text("some text");
+        gui::text("some text\nthat spawns over multiple lines");
+
+        {
+            gui::set_next_window_pos({ 300, 5 });
+            gui::begin_window("win2");
+            gui::button("button 2.1");
+            gui::button("button 2.2");
+            gui::text("camera:\n%7.3f %7.3f\n%7.3f %7.3f %7.3f", m_camera.ang_x, m_camera.ang_y,
+                      m_camera.pos.x, m_camera.pos.y, m_camera.pos.z);
+            gui::button("button 2.3");
+            gui::end_window();
+        }
+
+        gui::button("another button\nbut this one is\nbigger!");
+        gui::button("clicky");
+        gui::text("some more text");
+        gui::end_window();
+
+        {
+            gui::begin_window("win2");
+            gui::button("button 2.4");
+            gui::end_window();
+        }
+
+        gui::render();
+    }
 }

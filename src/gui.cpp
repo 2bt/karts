@@ -118,6 +118,11 @@ public:
         draw_quad(vs[10], vs[11], vs[14], vs[15]);
     }
 
+    void draw_glyph(const Vec& pos, const Col& color, uint8_t c) {
+        Vec uv = { c % 16 * FONT_WIDTH, c / 16 * FONT_HEIGHT };
+        Rect rect = { pos, pos + Vec(FONT_WIDTH, FONT_HEIGHT) };
+        draw_rect(rect, color, uv);
+    }
     void draw_text(const Vec& pos, const char* text) {
         Vec p = pos;
         while (char c = *text++) {
@@ -126,11 +131,7 @@ public:
                 p.x = pos.x;
                 continue;
             }
-            if (c > 32 || c < 128) {
-                Vec uv = { c % 16 * FONT_WIDTH, c / 16 * FONT_HEIGHT };
-                Rect rect = { p, p + Vec(FONT_WIDTH, FONT_HEIGHT) };
-                draw_rect(rect, { 255, 255, 255, 255 }, uv);
-            }
+            if (c > 32 || c < 128) draw_glyph(p, { 255, 255, 255, 255 }, c);
             p.x += FONT_WIDTH;
         }
     }
@@ -238,6 +239,7 @@ Col make_color(uint32_t c, uint8_t a = 255) {
 
 struct {
     Col window         = make_color(0x111111, 200);
+    Col window_title   = make_color(0x000000, 100);
     Col button         = make_color(0x225577, 200);
     Col button_hovered = make_color(0x336688, 200);
     Col button_active  = make_color(0x337799, 200);
@@ -353,6 +355,9 @@ void begin_window(const char* name) {
     Window* w = find_or_create_window(name);
     m_window_stack.emplace_back(w);
 
+    // have we been here before in this frame?
+    if (!w->dc.get_vertices().empty()) return;
+
     bool hovered = w == m_window_hovered;
     bool clicked = hovered && m_mouse_buttons_clicked[0] && !m_old_item_hovered;
     if (clicked) {
@@ -365,11 +370,17 @@ void begin_window(const char* name) {
         w->rect.max += m_mouse_mov;
     }
 
-    w->dc.draw_rect(w->rect, m_colors.window, RECT_FILL_ROUND_1);
+    Vec s = get_text_size(name);
+    Rect rect = { w->rect.min, w->rect.min + s + Vec(12) };
+    rect.max.x = glm::max(rect.max.x, w->rect.max.x);
 
-    w->cursor_pos = w->rect.min + Vec(4);
+    w->dc.draw_rect(w->rect, m_colors.window, RECT_FILL_ROUND_1);
+    w->dc.draw_rect(rect, m_colors.window_title, RECT_FILL_ROUND_1);
+    w->dc.draw_text(rect.min + Vec(6), name);
+
+    w->cursor_pos = rect.bl() + Vec(4);
     w->content_rect.min = w->cursor_pos;
-    w->content_rect.max = w->cursor_pos;
+    w->content_rect.max = rect.max - Vec(4);
 }
 
 
@@ -401,7 +412,14 @@ bool button(const char* label) {
                           m_colors.button;
 
     w->dc.draw_rect(bb, color, RECT_FILL_ROUND_1);
-    w->dc.draw_text(bb.min + Vec(4, 4), label);
+//    {
+//        Col c = { color.x * 0.6,
+//                  color.y * 0.6,
+//                  color.z * 0.6,
+//                  color.w, };
+//        w->dc.draw_rect(bb, c, RECT_STROKE_ROUND_1);
+//    }
+    w->dc.draw_text(bb.min + Vec(4), label);
 
     w->cursor_pos.y = rect.max.y;
     w->content_rect.max = max(w->content_rect.max, rect.max);
