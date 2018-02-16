@@ -324,9 +324,8 @@ public:
         Window* w = find_win(name);
         if (!w) w = create_win(name);
         m_win_stack.emplace_back(w);
-
         w->cursor_pos = w->pos;
-        Rect rect = { w->pos, w->pos + w->size };
+        Rect rect = { w->pos, w->size };
         draw_rect(rect, style.window_color, RECT_FILL_ROUND_1);
     }
     void end_win() {
@@ -336,10 +335,13 @@ public:
     }
     bool button(const char* label) {
         Window* w = m_win_stack.back();
-        Rect rect = { w->cursor_pos + Vec(2, 2),
-                      w->cursor_pos + Vec(98, 18) };
+        Vec s = get_text_size(label);
+
+        Rect rect = { w->cursor_pos + Vec(2), s + Vec(8) };
         draw_rect(rect, style.button_color, RECT_FILL_ROUND_1);
-        w->cursor_pos += Vec(0, 20);
+        draw_text(w->cursor_pos + Vec(6), label);
+
+        w->cursor_pos += Vec(0, s.y + 12);
         return false;
     }
     void text(const char* label) {
@@ -393,14 +395,16 @@ private:
     };
 
     struct Rect {
-        Vec min;
-        Vec max;
-
+        Rect() {}
+        Rect(const Vec& pos, const Vec& size) : min(pos), max(pos + size) {}
         Vec tl() const { return min; }
         Vec tr() const { return Vec(max.x, min.y); }
         Vec bl() const { return Vec(min.x, max.y); }
         Vec br() const { return max; }
         Vec size() const { return max - min; }
+
+        Vec min;
+        Vec max;
     };
 
     void draw_quad(const Vertex& v0,
@@ -425,7 +429,7 @@ private:
         };
         draw_quad(vs[0], vs[1], vs[2], vs[3]);
     }
-    void draw_rect(const Rect& rect, const Vec& uv, const Col& color) {
+    void draw_rect(const Rect& rect, const Col& color, const Vec& uv) {
         Vec s = rect.size();
         Vertex vs[] = {
             { rect.tl(), uv, color },
@@ -484,6 +488,38 @@ private:
         draw_quad(vs[10], vs[11], vs[14], vs[15]);
     }
 
+    static Vec get_text_size(const char* text) {
+        Vec s = { 0, FONT_HEIGHT };
+        short x = 0;
+        while (char c = *text++) {
+            if (c == '\n') {
+                s.y += FONT_HEIGHT;
+                x = 0;
+            }
+            else {
+                x += FONT_WIDTH;
+                s.x = std::max(s.x, x);
+            }
+        }
+        return s;
+    }
+    void draw_text(const Vec& pos, const char* text) {
+        Vec p = pos;
+        while (char c = *text++) {
+            if (c == 10) {
+                p.y += FONT_HEIGHT;
+                p.x = pos.x;
+                continue;
+            }
+            if (c > 32 || c < 128) {
+                Vec uv = { c % 16 * FONT_WIDTH, c / 16 * FONT_HEIGHT };
+                Rect rect = { p, Vec(FONT_WIDTH, FONT_HEIGHT) };
+                draw_rect(rect, { 255, 255, 255, 255 }, uv);
+            }
+            p.x += FONT_WIDTH;
+        }
+    }
+
     struct Window {
         Window*       next;
         const char*   name;
@@ -508,7 +544,7 @@ private:
         m_win_head = w;
         w->name = name;
         w->pos = { 50, 50 };
-        w->size = { 100, 100 };
+        w->size = { 200, 200 };
         return w;
     }
 
@@ -544,7 +580,7 @@ void World::draw() {
     if (gui.button("click me!")) puts("button was clicked");
     gui.text("hallo");
     gui.text("some text");
-    gui.button("another button");
+    gui.button("another button\nbut this one is\nbigger!");
     gui.text("some more text");
     gui.end_win();
 
