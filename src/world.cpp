@@ -343,14 +343,21 @@ public:
 
         Rect bb = rect.expand(-2);
         bool hovered = bb.contains(m_mouse_pos);
-        Col color = hovered ? m_colors.button_hovered :
+        bool clicked = hovered && m_mouse_buttons_clicked[0];
+        if (clicked) m_active_item = label;
+        bool active = m_active_item == label;
+
+        Col color = active  ? m_colors.button_active :
+                    hovered ? m_colors.button_hovered :
                               m_colors.button;
+
         draw_rect(bb, color, RECT_FILL_ROUND_1);
         draw_text(bb.min + Vec(4), label);
 
         w->cursor_pos.y = rect.max.y;
         w->content_rect.max = max(w->content_rect.max, rect.max);
-        return false;
+
+        return clicked;
     }
     void text(const char* label) {
         Window* w = m_win_stack.back();
@@ -366,9 +373,19 @@ public:
     void new_frame() {
         m_vertices.clear();
         int x, y;
-        m_mouse_buttons = SDL_GetMouseState(&x, &y);
+        Uint32 b = SDL_GetMouseState(&x, &y);
+        bool bs[] = {
+            b & SDL_BUTTON(SDL_BUTTON_LEFT),
+            b & SDL_BUTTON(SDL_BUTTON_MIDDLE),
+            b & SDL_BUTTON(SDL_BUTTON_RIGHT),
+        };
+        for (int i = 0; i < 3; ++i) {
+            m_mouse_buttons_clicked[i] = !m_mouse_buttons[i] && bs[i];
+            m_mouse_buttons[i] = bs[i];
+        }
+        if (!m_mouse_buttons[0]) m_active_item = nullptr;
+
         m_mouse_pos = { x, y };
-        m_hover_item = nullptr;
     }
     void render() {
         m_vb->init_data(m_vertices);
@@ -573,11 +590,14 @@ private:
     }
 
     Vec                    m_mouse_pos;
-    Uint32                 m_mouse_buttons;
-    const char*            m_hover_item;
+    std::array<bool, 3>    m_mouse_buttons;
+    std::array<bool, 3>    m_mouse_buttons_clicked;
+
+    const char*            m_active_item;
 
     Window*                m_win_head = nullptr;
     std::vector<Window*>   m_win_stack;
+
 
     std::vector<Vertex>    m_vertices;
 
