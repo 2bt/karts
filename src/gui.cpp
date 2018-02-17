@@ -518,6 +518,15 @@ bool drag_float(const char* label, float& v, float speed, float min, float max, 
                               m_colors.frame;
 
         w->dc.draw_rect(bb, color, RECT_FILL);
+
+        // handle
+        if (min < max) {
+            int x = (bb.size().x - 4) * (v - min) / (max - min);
+            Rect handle_rect = { Vec(bb.min.x + x, bb.min.y),
+                                 Vec(bb.min.x + x + 4, bb.max.y) };
+            w->dc.draw_rect(handle_rect, color);
+        }
+
         print_to_text_buffer(fmt, v);
         Vec s = get_text_size(m_text_buffer.data());
         w->dc.draw_text(item_rect.center() - Vec(s.x / 2, s.y / 2), m_text_buffer.data());
