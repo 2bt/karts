@@ -10,6 +10,9 @@
 #include <glm/gtx/transform.hpp>
 
 
+Renderer3D renderer3D;
+
+
 void init_light_map(Light& l) {
     int light_map_size = 1024;
     l.shadow_map = rmw::context.create_texture_2D(rmw::TextureFormat::Depth,
@@ -30,6 +33,7 @@ void init_light_map(Light& l) {
 
 
 void World::init() {
+    renderer3D.init();
 
     m_light_shader = rmw::context.create_shader(R"(#version 100
     attribute vec3 a_pos;
@@ -159,9 +163,8 @@ void World::update_camera() {
 
     renderer3D.set_transformation(m_camera.vp_mat);
 
-//    LOG("camera: %f %f %f %f %f", m_camera.ang_x, m_camera.ang_y,
-//        m_camera.pos.x, m_camera.pos.y, m_camera.pos.z);
-
+    gui::text("camera:\n%7.3f %7.3f\n%7.3f %7.3f %7.3f", m_camera.ang_x, m_camera.ang_y,
+              m_camera.pos.x, m_camera.pos.y, m_camera.pos.z);
 }
 
 
@@ -210,7 +213,6 @@ void World::check_picking() {
 
 
 void World::update() {
-
     update_camera();
     update_light();
     check_picking();
@@ -349,40 +351,4 @@ void World::draw() {
 //    }
 
     renderer3D.flush();
-
-    // some test gui
-    {
-        static int c = 0; if (!c++) gui::init();
-        gui::new_frame();
-
-        gui::begin_window("my test window");
-        gui::text("hallo");
-        if (gui::button("click me!")) puts("button was clicked");
-        gui::text("some text");
-        gui::text("some text\nthat spawns over multiple lines");
-
-        {
-            gui::set_next_window_pos({ 300, 5 });
-            gui::begin_window("win2");
-            gui::button("button 2.1");
-            gui::button("button 2.2");
-            gui::text("camera:\n%7.3f %7.3f\n%7.3f %7.3f %7.3f", m_camera.ang_x, m_camera.ang_y,
-                      m_camera.pos.x, m_camera.pos.y, m_camera.pos.z);
-            gui::button("button 2.3");
-            gui::end_window();
-        }
-
-        gui::button("another button\nbut this one is\nbigger!");
-        gui::button("clicky");
-        gui::text("some more text");
-        gui::end_window();
-
-        {
-            gui::begin_window("win2");
-            gui::button("button 2.4");
-            gui::end_window();
-        }
-
-        gui::render();
-    }
 }

@@ -3,6 +3,7 @@
 #include "mesh.h"
 #include "log.h"
 #include "renderer3d.h"
+#include "gui.h"
 
 
 void init_model(Model& model, const Mesh& mesh) {
@@ -68,7 +69,7 @@ void Kart::init(btDynamicsWorld* world) {
     m_world->addRigidBody(m_rigid_body.get());
 
     m_rigid_body->setActivationState(DISABLE_DEACTIVATION);
-    m_rigid_body->setDamping(0.2, 0.2);
+    //m_rigid_body->setDamping(0.2, 0.2);
     m_rigid_body->setUserPointer(this);
 }
 
@@ -112,24 +113,46 @@ void Kart::update() {
         const glm::vec3 v = glm::vec3(vs[i].x * m_size.x, 0, vs[i].y * m_size.z) * 1.05f;
         s.o = glm::vec3(m_model.transform * glm::vec4(v, 1));
 
-        const float sensor_length = 1.0;
-        const glm::vec3 n = glm::vec3(m_model.transform * glm::vec4(0, 1, 0, 0));
-        s.p = s.o - n * sensor_length;
+        const float spring_rest_length = 0.8;
+        const float spring_constant = 2000;
+        const float spring_damping = 10000;
+
+
+        const glm::vec3 normal = glm::vec3(m_model.transform * glm::vec4(0, 1, 0, 0));
+        s.p = s.o - normal * spring_rest_length;
 
         btVector3 o = to_bt(s.o);
         btVector3 p = to_bt(s.p);
         btCollisionWorld::ClosestRayResultCallback cb(o, p);
         m_world->rayTest(o, p, cb);
 
+        float spring_force = 0;
+        float spring_vel = 0;
+        float spring_length = spring_rest_length;
+        static float old_spring_length[4];
+
         if (cb.hasHit()) {
             s.p = to_glm(cb.m_hitPointWorld);
 
-//            glm::vec3 vel = to_glm(m_rigid_body->getVelocityInLocalPoint(o));
-//            float v = glm::dot(vel, n);
+            spring_length *= cb.m_closestHitFraction;
+            spring_vel = spring_length - old_spring_length[i];
 
-            float f = 1 - cb.m_closestHitFraction;
-            m_rigid_body->applyForce(to_bt(n) * 150 * f, o - trans.getOrigin());
+            spring_force = spring_constant * (spring_rest_length - spring_length);
+            // TODO: fix this formula to prevent explisions
+            if (spring_vel < 0) spring_force -= spring_vel * spring_damping;
+            else                spring_force -= spring_force * 0.9;
+
+            spring_force = glm::clamp(spring_force, -1000.0f, 1000.0f);
+
+            m_rigid_body->applyForce(to_bt(normal) * spring_force, o - trans.getOrigin());
         }
+        old_spring_length[i] = spring_length;
+
+        //if (i == 0) LOG("%*s", int(30 + spring_force  * 0.01), "#");
+
+        gui::text("spring force: %7.3f\n"
+                  "spring vel:   %7.3f",
+                  spring_force, spring_vel * spring_damping);
     }
 
 
@@ -137,8 +160,7 @@ void Kart::update() {
     static bool old_q;
     const Uint8* ks = SDL_GetKeyboardState(nullptr);
     bool q = ks[SDL_SCANCODE_RETURN];
-    if (q && !old_q) {
-        LOG("impulse");
+    if (gui::button("random impulse") | (q && !old_q)) {
         auto randf = []() { return rand() / (float) RAND_MAX; };
         glm::vec3 s = glm::vec3(randf(), randf(), randf()) * 2.0f - glm::vec3(1);
         s *= m_size;
@@ -146,7 +168,7 @@ void Kart::update() {
     }
     old_q = q;
 
-    if (ks[SDL_SCANCODE_X]) {
+    if (gui::button("reset transform") || ks[SDL_SCANCODE_X]) {
         btTransform& t = m_rigid_body->getWorldTransform();
         t.setOrigin(btVector3(0, 3, 0));
         t.setRotation(btQuaternion(0, 0, 0));

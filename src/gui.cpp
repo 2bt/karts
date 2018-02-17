@@ -57,10 +57,15 @@ enum RectStyle {
 
 class DrawContext {
 public:
+
+    void set_active(bool a) { m_active = a; }
+
     void clear() { m_vertices.clear(); }
+
     const std::vector<Vertex>& get_vertices() const { return m_vertices; }
 
     void draw_rect(const Rect& rect, const Col& color) {
+        if (!m_active) return;
         Vertex vs[] = {
             { rect.tl(), {0, 0}, color },
             { rect.bl(), {0, 1}, color },
@@ -71,6 +76,7 @@ public:
     }
 
     void draw_rect(const Rect& rect, const Col& color, const Vec& uv) {
+        if (!m_active) return;
         Vec s = rect.size();
         Vertex vs[] = {
             { rect.tl(), uv, color },
@@ -82,6 +88,7 @@ public:
     }
 
     void draw_rect(const Rect& rect, const Col& color, RectStyle style) {
+        if (!m_active) return;
         if (style == 0) {
             draw_rect(rect, color);
             return;
@@ -119,11 +126,13 @@ public:
     }
 
     void draw_glyph(const Vec& pos, const Col& color, uint8_t c) {
+        if (!m_active) return;
         Vec uv = { c % 16 * FONT_WIDTH, c / 16 * FONT_HEIGHT };
         Rect rect = { pos, pos + Vec(FONT_WIDTH, FONT_HEIGHT) };
         draw_rect(rect, color, uv);
     }
     void draw_text(const Vec& pos, const char* text) {
+        if (!m_active) return;
         Vec p = pos;
         while (char c = *text++) {
             if (c == 10) {
@@ -150,6 +159,7 @@ private:
         m_vertices.emplace_back(v3);
     }
 
+    bool                m_active;
     std::vector<Vertex> m_vertices;
 };
 
@@ -158,6 +168,8 @@ struct Window {
     Window*     next;
     const char* name;
     Rect        rect;
+
+    int         item_count;
 
     // drawing
     Vec         cursor_pos;
@@ -198,6 +210,8 @@ Window* find_or_create_window(const char* name) {
     Window* w = m_windows.back().get();
     w->name = name;
     w->rect.min = w->rect.max = m_window_spawn_pos;
+    w->item_count = 0;
+
     m_window_spawn_pos += Vec(200, 0);
 
     return w;
@@ -232,6 +246,7 @@ Vec get_text_size(const char* text) {
     return s;
 }
 
+
 Col make_color(uint32_t c, uint8_t a = 255) {
     return { (c >> 16) & 255, (c >>  8) & 255, c & 255, a};
 }
@@ -241,8 +256,8 @@ struct {
     Col window         = make_color(0x111111, 200);
     Col window_title   = make_color(0x000000, 100);
     Col button         = make_color(0x225577, 200);
-    Col button_hovered = make_color(0x336688, 200);
-    Col button_active  = make_color(0x337799, 200);
+    Col button_hovered = make_color(0x446688, 200);
+    Col button_active  = make_color(0x447799, 200);
 } const m_colors;
 
 
@@ -316,17 +331,31 @@ void new_frame() {
     }
 
     m_old_item_hovered = m_item_hovered;
-    m_item_hovered = nullptr;
-    m_window_hovered = nullptr;
+    m_item_hovered     = nullptr;
+    m_window_hovered   = nullptr;
+
     for (int i = (int) m_windows.size() - 1; i >= 0; --i) {
         auto& w = m_windows[i];
         w->dc.clear();
+        w->dc.set_active(w->item_count > 0);
+        w->item_count = 0;
+
         if (!m_window_hovered && w->rect.contains(m_mouse_pos)) m_window_hovered = w.get();
+
+        // adjust window size
+        if (w->content_rect.min != w->content_rect.max) {
+            w->rect.max = glm::max(w->rect.max, w->content_rect.max + Vec(4));
+        }
     }
+
+    // have a default debug window
+    gui::begin_window("Debug");
 }
 
 
 void render() {
+    gui::end_window();
+
     glm::vec2 scale = { 1.0f / rmw::context.get_width(),
                         1.0f / rmw::context.get_height() };
     m_shader->set_uniform("scale", scale);
@@ -371,28 +400,28 @@ void begin_window(const char* name) {
     }
 
     Vec s = get_text_size(name);
-    Rect rect = { w->rect.min, w->rect.min + s + Vec(12) };
-    rect.max.x = glm::max(rect.max.x, w->rect.max.x);
+    Rect title_rect = { w->rect.min, w->rect.min + s + Vec(12) };
+    w->rect.max = max(w->rect.max, title_rect.max);
+    title_rect.max.x = w->rect.max.x;
 
     w->dc.draw_rect(w->rect, m_colors.window, RECT_FILL_ROUND_1);
-    w->dc.draw_rect(rect, m_colors.window_title, RECT_FILL_ROUND_1);
-    w->dc.draw_text(rect.min + Vec(6), name);
+    w->dc.draw_rect(title_rect, m_colors.window_title, RECT_FILL_ROUND_1);
+    w->dc.draw_text(title_rect.min + Vec(6), name);
 
-    w->cursor_pos = rect.bl() + Vec(4);
+    w->cursor_pos = title_rect.bl() + Vec(4);
     w->content_rect.min = w->cursor_pos;
-    w->content_rect.max = rect.max - Vec(4);
+    w->content_rect.max = w->cursor_pos;
 }
 
 
 void end_window() {
-    Window* w = m_window_stack.back();
-    w->rect.max = w->content_rect.max + Vec(4);
     m_window_stack.pop_back();
 }
 
 
 bool button(const char* label) {
     Window* w = m_window_stack.back();
+
     Vec s = get_text_size(label);
     Rect rect = { w->cursor_pos, w->cursor_pos + s + Vec(12, 16) };
 
@@ -423,19 +452,20 @@ bool button(const char* label) {
 
     w->cursor_pos.y = rect.max.y;
     w->content_rect.max = max(w->content_rect.max, rect.max);
-
+    ++w->item_count;
     return clicked;
 }
 
 
 void text(const char* fmt, ...) {
+    Window* w = m_window_stack.back();
+
     static std::array<char, 1024> buffer;
     va_list args;
     va_start(args, fmt);
     vsnprintf(buffer.data(), buffer.size(), fmt, args);
     va_end(args);
 
-    Window* w = m_window_stack.back();
     Vec s = get_text_size(buffer.data());
     Rect rect = { w->cursor_pos, w->cursor_pos + s + Vec(4) };
 
@@ -443,6 +473,7 @@ void text(const char* fmt, ...) {
 
     w->cursor_pos.y = rect.max.y;
     w->content_rect.max = max(w->content_rect.max, rect.max);
+    ++w->item_count;
 }
 
 

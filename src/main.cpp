@@ -4,20 +4,18 @@
 #include <html5.h>
 #endif
 #include "log.h"
-#include "renderer3d.h"
 #include "world.h"
-
-
-Renderer3D renderer3D;
+#include "gui.h"
 
 
 class App {
 public:
     App() {
         rmw::context.init(800, 600, "karts");
-        renderer3D.init();
+        gui::init();
         m_world.init();
     }
+
     bool loop() {
         SDL_Event e;
         while (rmw::context.poll_event(e)) {
@@ -32,9 +30,16 @@ public:
             default: break;
             }
         }
+
+        gui::new_frame();
+
         m_world.update();
         m_world.draw();
+
+        gui::render();
+
         rmw::context.flip_buffers();
+
         return true;
     }
     static void loop(void* arg) { static_cast<App*>(arg)->loop(); }
