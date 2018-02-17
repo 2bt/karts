@@ -97,7 +97,7 @@ struct Spring {
 std::array<Spring, 4> m_springs;
 float                 spring_rest_length = 0.8;
 float                 spring_constant    = 20000;
-float                 spring_damping     = 2000;
+float                 spring_damping     = 0.1;
 
 
 void Kart::update() {
@@ -107,6 +107,8 @@ void Kart::update() {
 
 
     gui::drag_float("spring length", spring_rest_length, 0.005, 0.1, 3);
+    gui::drag_float("spring constant", spring_constant, 100, 1000, 60000);
+    gui::drag_float("spring damping", spring_damping, 0.001, 0, 0.5);
 
 
     // suspension
@@ -143,7 +145,7 @@ void Kart::update() {
 
             // TODO: fix this formula to prevent explisions
             vel = (spring.length - spring.old_length) * 60;
-            damping_force = vel * spring_damping;
+            damping_force = vel * spring_constant * spring_damping;
             if (damping_force > 0) damping_force *= 0.9;
             force -= damping_force;
             force = glm::clamp(force, -10000.0f, 10000.0f);

@@ -484,7 +484,7 @@ void text(const char* fmt, ...) {
 }
 
 
-const int item_width_default = 12 * FONT_WIDTH;
+const int item_width_default = 16 * FONT_WIDTH;
 
 
 bool drag_float(const char* label, float& v, float speed, float min, float max, const char* fmt) {
