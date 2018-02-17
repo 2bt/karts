@@ -123,7 +123,7 @@ void World::init() {
                                                              m_broadphase.get(),
                                                              m_solver.get(),
                                                              m_config.get());
-    m_world->setGravity(btVector3(0, -2, 0));
+    m_world->setGravity(btVector3(0, -9.8, 0));
     m_world->setInternalTickCallback(World::tick, static_cast<void*>(this), false);
 
 
