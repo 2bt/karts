@@ -53,7 +53,7 @@ void Kart::init(btDynamicsWorld* world) {
     m_shape = std::make_unique<btBoxShape>(btVector3(m_size.x, m_size.y, m_size.z));
 
 
-    float mass = 100;
+    float mass = 1000;
     btVector3 inertia;
     m_shape->calculateLocalInertia(mass, inertia);
 
@@ -85,24 +85,33 @@ void Kart::pick(const glm::vec3& pos, const glm::vec3& normal) {
 }
 
 
-struct Sensor {
-    glm::vec3 o;
-    glm::vec3 p;
+struct Spring {
+    // for drawing
+    glm::vec3 start_point;
+    glm::vec3 end_point;
+
+    float length;
+    float old_length;
 };
-std::array<Sensor, 4> m_sensors;
+
+std::array<Spring, 4> m_springs;
+float                 spring_rest_length = 0.8;
+float                 spring_constant    = 20000;
+float                 spring_damping     = 2000;
 
 
 void Kart::update() {
-
     btTransform trans;
     m_motion_state->getWorldTransform(trans);
     trans.getOpenGLMatrix(reinterpret_cast<float*>(&m_model.transform));
 
 
+    gui::drag_float("spring length", spring_rest_length, 0.005, 0.1, 3);
+
 
     // suspension
     for (int i = 0; i < 4; ++i) {
-        Sensor& s = m_sensors[i];
+        Spring& spring = m_springs[i];
 
         const glm::vec2 vs[] = {
             glm::vec2( 1,  1),
@@ -110,49 +119,44 @@ void Kart::update() {
             glm::vec2( 1, -1),
             glm::vec2(-1, -1),
         };
-        const glm::vec3 v = glm::vec3(vs[i].x * m_size.x, 0, vs[i].y * m_size.z) * 1.05f;
-        s.o = glm::vec3(m_model.transform * glm::vec4(v, 1));
 
-        const float spring_rest_length = 0.8;
-        const float spring_constant = 2000;
-        const float spring_damping = 10000;
-
-
+        const glm::vec3 v      = glm::vec3(vs[i].x * m_size.x, 0, vs[i].y * m_size.z) * 1.05f;
+        spring.start_point     = glm::vec3(m_model.transform * glm::vec4(v, 1));
         const glm::vec3 normal = glm::vec3(m_model.transform * glm::vec4(0, 1, 0, 0));
-        s.p = s.o - normal * spring_rest_length;
+        spring.end_point       = spring.start_point - normal * spring_rest_length;
 
-        btVector3 o = to_bt(s.o);
-        btVector3 p = to_bt(s.p);
-        btCollisionWorld::ClosestRayResultCallback cb(o, p);
-        m_world->rayTest(o, p, cb);
+        btVector3 sp = to_bt(spring.start_point);
+        btVector3 ep = to_bt(spring.end_point);
+        btCollisionWorld::ClosestRayResultCallback cb(sp, ep);
+        m_world->rayTest(sp, ep, cb);
 
-        float spring_force = 0;
-        float spring_vel = 0;
-        float spring_length = spring_rest_length;
-        static float old_spring_length[4];
+        float force = 0;
+        float damping_force = 0;
+        float vel = 0;
+        spring.length = spring_rest_length;
 
         if (cb.hasHit()) {
-            s.p = to_glm(cb.m_hitPointWorld);
+            spring.end_point = to_glm(cb.m_hitPointWorld);
 
-            spring_length *= cb.m_closestHitFraction;
-            spring_vel = spring_length - old_spring_length[i];
+            spring.length *= cb.m_closestHitFraction;
+            force = spring_constant * (spring_rest_length - spring.length);
 
-            spring_force = spring_constant * (spring_rest_length - spring_length);
             // TODO: fix this formula to prevent explisions
-            if (spring_vel < 0) spring_force -= spring_vel * spring_damping;
-            else                spring_force -= spring_force * 0.9;
+            vel = (spring.length - spring.old_length) * 60;
+            damping_force = vel * spring_damping;
+            if (damping_force > 0) damping_force *= 0.9;
+            force -= damping_force;
+            force = glm::clamp(force, -10000.0f, 10000.0f);
 
-            spring_force = glm::clamp(spring_force, -1000.0f, 1000.0f);
-
-            m_rigid_body->applyForce(to_bt(normal) * spring_force, o - trans.getOrigin());
+            m_rigid_body->applyForce(to_bt(normal) * force, sp - trans.getOrigin());
         }
-        old_spring_length[i] = spring_length;
+        spring.old_length = spring.length;
 
         //if (i == 0) LOG("%*s", int(30 + spring_force  * 0.01), "#");
 
         gui::text("spring force: %7.3f\n"
                   "spring vel:   %7.3f",
-                  spring_force, spring_vel * spring_damping);
+                  force, vel);
     }
 
 
@@ -164,7 +168,7 @@ void Kart::update() {
         auto randf = []() { return rand() / (float) RAND_MAX; };
         glm::vec3 s = glm::vec3(randf(), randf(), randf()) * 2.0f - glm::vec3(1);
         s *= m_size;
-        m_rigid_body->applyImpulse(btVector3(0, 200, 0), btVector3(s.x, s.y, s.z));
+        m_rigid_body->applyImpulse(btVector3(0, 2000, 0), btVector3(s.x, s.y, s.z));
     }
     old_q = q;
 
@@ -176,12 +180,12 @@ void Kart::update() {
     }
 
     m_rigid_body->applyTorque(
-            btVector3(0, (ks[SDL_SCANCODE_C] - ks[SDL_SCANCODE_V]) * 100, 0));
+            btVector3(0, (ks[SDL_SCANCODE_C] - ks[SDL_SCANCODE_V]) * 1000, 0));
 
     {
         int d = ks[SDL_SCANCODE_PERIOD] - ks[SDL_SCANCODE_COMMA];
         glm::vec3 p = glm::vec3(m_model.transform * glm::vec4(m_pick_pos, 1));
-        m_rigid_body->applyForce(btVector3(0, d * 200, 0),
+        m_rigid_body->applyForce(btVector3(0, d * 2000, 0),
                                  to_bt(p) - trans.getOrigin());
     }
 }
@@ -198,14 +202,14 @@ void Kart::tick() {
 
 void Kart::debug_draw() {
 
-    for (const Sensor& s : m_sensors) {
+    for (const Spring& spring : m_springs) {
         renderer3D.set_color(255, 200, 0);
-        renderer3D.line(s.o, s.p);
+        renderer3D.line(spring.start_point, spring.end_point);
     }
     renderer3D.set_point_size(3);
-    for (const Sensor& s : m_sensors) {
+    for (const Spring& spring : m_springs) {
         renderer3D.set_color(255, 0, 0);
-        renderer3D.point(s.p);
+        renderer3D.point(spring.end_point);
     }
 
 

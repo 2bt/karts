@@ -223,7 +223,6 @@ void World::update() {
 
 
 void World::tick() {
-
     m_kart.tick();
 }
 

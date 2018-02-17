@@ -20,5 +20,5 @@ namespace gui {
 
     bool button(const char* label);
     void text(const char* fmt, ...);
-
+    bool drag_float(const char* label, float& v, float speed = 1, float min = 0, float max = 0, const char* fmt = "%.3f");
 }

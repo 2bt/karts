@@ -30,6 +30,7 @@ struct Rect {
     Vec tr() const { return Vec(max.x, min.y); }
     Vec bl() const { return Vec(min.x, max.y); }
     Vec br() const { return max; }
+    Vec center() const { Vec v = min + max; return Vec(v.x / 2, v.y / 2); }
     Vec size() const { return max - min; }
     Rect expand(short d) const { return { min - Vec(d), max + Vec(d) }; }
     Rect expand(const Vec& d) const { return { min - d, max + d }; }
@@ -169,8 +170,6 @@ struct Window {
     const char* name;
     Rect        rect;
 
-    int         item_count;
-
     // drawing
     Vec         cursor_pos;
     Rect        content_rect;
@@ -199,6 +198,20 @@ rmw::VertexArray::Ptr                m_va;
 rmw::VertexBuffer::Ptr               m_vb;
 
 
+std::array<char, 1024>               m_text_buffer;
+
+
+void print_to_text_buffer(const char* fmt, va_list args) {
+    vsnprintf(m_text_buffer.data(), m_text_buffer.size(), fmt, args);
+}
+
+
+void print_to_text_buffer(const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    print_to_text_buffer(fmt, args);
+    va_end(args);
+}
 
 
 Window* find_or_create_window(const char* name) {
@@ -210,7 +223,6 @@ Window* find_or_create_window(const char* name) {
     Window* w = m_windows.back().get();
     w->name = name;
     w->rect.min = w->rect.max = m_window_spawn_pos;
-    w->item_count = 0;
 
     m_window_spawn_pos += Vec(200, 0);
 
@@ -258,6 +270,9 @@ struct {
     Col button         = make_color(0x225577, 200);
     Col button_hovered = make_color(0x446688, 200);
     Col button_active  = make_color(0x447799, 200);
+    Col frame          = make_color(0x225577, 100);
+    Col frame_hovered  = make_color(0x446688, 100);
+    Col frame_active   = make_color(0x447799, 100);
 } const m_colors;
 
 
@@ -337,8 +352,7 @@ void new_frame() {
     for (int i = (int) m_windows.size() - 1; i >= 0; --i) {
         auto& w = m_windows[i];
         w->dc.clear();
-        w->dc.set_active(w->item_count > 0);
-        w->item_count = 0;
+        w->dc.set_active(w->content_rect.size() != Vec(0, 0));
 
         if (!m_window_hovered && w->rect.contains(m_mouse_pos)) m_window_hovered = w.get();
 
@@ -423,7 +437,7 @@ bool button(const char* label) {
     Window* w = m_window_stack.back();
 
     Vec s = get_text_size(label);
-    Rect rect = { w->cursor_pos, w->cursor_pos + s + Vec(12, 16) };
+    Rect rect = { w->cursor_pos, w->cursor_pos + s + Vec(16, 20) };
 
     Rect bb = rect.expand({ -2, -4 });
     bool hovered = w == m_window_hovered && bb.contains(m_mouse_pos);
@@ -441,18 +455,10 @@ bool button(const char* label) {
                           m_colors.button;
 
     w->dc.draw_rect(bb, color, RECT_FILL_ROUND_1);
-//    {
-//        Col c = { color.x * 0.6,
-//                  color.y * 0.6,
-//                  color.z * 0.6,
-//                  color.w, };
-//        w->dc.draw_rect(bb, c, RECT_STROKE_ROUND_1);
-//    }
-    w->dc.draw_text(bb.min + Vec(4), label);
+    w->dc.draw_text(bb.min + Vec(6), label);
 
     w->cursor_pos.y = rect.max.y;
     w->content_rect.max = max(w->content_rect.max, rect.max);
-    ++w->item_count;
     return clicked;
 }
 
@@ -460,20 +466,72 @@ bool button(const char* label) {
 void text(const char* fmt, ...) {
     Window* w = m_window_stack.back();
 
-    static std::array<char, 1024> buffer;
     va_list args;
     va_start(args, fmt);
-    vsnprintf(buffer.data(), buffer.size(), fmt, args);
+    print_to_text_buffer(fmt, args);
     va_end(args);
 
-    Vec s = get_text_size(buffer.data());
+    Vec s = get_text_size(m_text_buffer.data());
     Rect rect = { w->cursor_pos, w->cursor_pos + s + Vec(4) };
 
-    w->dc.draw_text(rect.min + Vec(2), buffer.data());
+    w->dc.draw_text(rect.min + Vec(2), m_text_buffer.data());
 
     w->cursor_pos.y = rect.max.y;
-    w->content_rect.max = max(w->content_rect.max, rect.max);
-    ++w->item_count;
+    w->content_rect.max = glm::max(w->content_rect.max, rect.max);
+}
+
+
+const int item_width_default = 12 * FONT_WIDTH;
+
+
+bool drag_float(const char* label, float& v, float speed, float min, float max, const char* fmt) {
+    Window* w = m_window_stack.back();
+
+    Vec s = get_text_size(label);
+    Rect item_rect  = { w->cursor_pos,
+                        w->cursor_pos + Vec(item_width_default, s.y) + Vec(12, 16) };
+
+    Rect label_rect = { item_rect.tr(),
+                        item_rect.tr() + s + Vec(4, 16) };
+
+    Rect bb = item_rect.expand({ -2, -4 });
+
+    bool hovered = w == m_window_hovered && bb.contains(m_mouse_pos);
+    if (hovered) m_item_hovered = label;
+    bool clicked = hovered && m_mouse_buttons_clicked[0];
+    if (clicked) {
+        m_item_active = label;
+        move_window_to_front(w);
+    }
+    bool active = m_item_active == label;
+    float old_v = v;
+    if (active) {
+        v += m_mouse_mov.x * speed;
+        if (min < max) v = glm::clamp(v, min, max);
+    }
+    bool changed = v != old_v;
+
+    // draw item
+    {
+        Col color = active  ? m_colors.frame_active :
+                    hovered ? m_colors.frame_hovered :
+                              m_colors.frame;
+
+        w->dc.draw_rect(bb, color, RECT_FILL);
+        print_to_text_buffer(fmt, v);
+        Vec s = get_text_size(m_text_buffer.data());
+        w->dc.draw_text(item_rect.center() - Vec(s.x / 2, s.y / 2), m_text_buffer.data());
+    }
+
+    // draw label
+    {
+        w->dc.draw_text(label_rect.min + Vec(2, 8), label);
+    }
+
+    w->cursor_pos.y = label_rect.max.y;
+    w->content_rect.max = glm::max(w->content_rect.max, label_rect.max);
+
+    return changed;
 }
 
 
