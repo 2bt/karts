@@ -273,6 +273,9 @@ struct {
     Col frame          = make_color(0x225577, 100);
     Col frame_hovered  = make_color(0x446688, 100);
     Col frame_active   = make_color(0x447799, 100);
+    Col handle         = make_color(0x225577, 200);
+    Col handle_hovered = make_color(0x446688, 200);
+    Col handle_active  = make_color(0x447799, 200);
 } const m_colors;
 
 
@@ -521,6 +524,11 @@ bool drag_float(const char* label, float& v, float speed, float min, float max, 
 
         // handle
         if (min < max) {
+
+            Col color = active  ? m_colors.handle_active :
+                        hovered ? m_colors.handle_hovered :
+                                  m_colors.handle;
+
             int x = (bb.size().x - 4) * (v - min) / (max - min);
             Rect handle_rect = { Vec(bb.min.x + x, bb.min.y),
                                  Vec(bb.min.x + x + 4, bb.max.y) };

@@ -221,8 +221,4 @@ void Kart::debug_draw() {
     renderer3D.line(p1, p2);
     renderer3D.set_color(0, 255, 0);
     renderer3D.point(p1);
-
 }
-
-
-
