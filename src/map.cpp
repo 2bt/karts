@@ -109,6 +109,9 @@ void Kart::update() {
     m_motion_state->getWorldTransform(trans);
     trans.getOpenGLMatrix(reinterpret_cast<float*>(&m_model.transform));
 
+    static bool physics = true;
+    gui::checkbox("physics", physics);
+    if (!physics) return;
 
     gui::drag_float("spring length", spring_rest_length, 0, 0.1, 3);
     gui::drag_float("spring constant", spring_constant, 0, 1000, 60000);

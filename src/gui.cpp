@@ -273,9 +273,7 @@ struct {
     Col frame          = make_color(0x225577, 100);
     Col frame_hovered  = make_color(0x446688, 100);
     Col frame_active   = make_color(0x447799, 100);
-    Col handle         = make_color(0x225577, 200);
-    Col handle_hovered = make_color(0x446688, 200);
-    Col handle_active  = make_color(0x447799, 200);
+    Col handle         = make_color(0x447799, 200);
 } const m_colors;
 
 
@@ -421,8 +419,8 @@ void begin_window(const char* name) {
     w->rect.max = max(w->rect.max, title_rect.max);
     title_rect.max.x = w->rect.max.x;
 
-    w->dc.draw_rect(w->rect, m_colors.window, RECT_FILL_ROUND_1);
-    w->dc.draw_rect(title_rect, m_colors.window_title, RECT_FILL_ROUND_1);
+    w->dc.draw_rect(w->rect, m_colors.window, RECT_FILL_ROUND_3);
+    w->dc.draw_rect(title_rect, m_colors.window_title, RECT_FILL_ROUND_3);
     w->dc.draw_text(title_rect.min + Vec(6), name);
 
     w->cursor_pos = title_rect.bl() + Vec(4);
@@ -440,9 +438,9 @@ bool button(const char* label) {
     Window* w = m_window_stack.back();
 
     Vec s = get_text_size(label);
-    Rect rect = { w->cursor_pos, w->cursor_pos + s + Vec(16, 20) };
+    Rect rect = { w->cursor_pos, w->cursor_pos + s + Vec(12) };
 
-    Rect bb = rect.expand({ -2, -4 });
+    Rect bb = rect.expand(-2);
     bool hovered = w == m_window_hovered && bb.contains(m_mouse_pos);
     if (hovered) m_item_hovered = label;
     bool clicked = hovered && m_mouse_buttons_clicked[0];
@@ -450,7 +448,6 @@ bool button(const char* label) {
         m_item_active = label;
         move_window_to_front(w);
     }
-
     bool active = m_item_active == label;
 
     Col color = active  ? m_colors.button_active :
@@ -458,10 +455,58 @@ bool button(const char* label) {
                           m_colors.button;
 
     w->dc.draw_rect(bb, color, RECT_FILL_ROUND_1);
-    w->dc.draw_text(bb.min + Vec(6), label);
+    w->dc.draw_text(bb.min + Vec(4), label);
 
     w->cursor_pos.y = rect.max.y;
     w->content_rect.max = max(w->content_rect.max, rect.max);
+
+    return clicked;
+}
+
+
+bool checkbox(const char* label, bool& v) {
+    Window* w = m_window_stack.back();
+
+    Vec s = get_text_size(label);
+
+    float check_width = s.y + 12;
+    float label_width = s.x + 4;
+
+    Rect rect = { w->cursor_pos,
+                  w->cursor_pos + Vec(check_width + label_width, check_width) };
+
+    Rect bb = Rect(rect.min, rect.min + Vec(check_width)).expand(-2);
+
+    bool hovered = w == m_window_hovered && rect.expand(-2).contains(m_mouse_pos);
+    if (hovered) m_item_hovered = label;
+    bool clicked = hovered && m_mouse_buttons_clicked[0];
+    if (clicked) {
+        m_item_active = label;
+        move_window_to_front(w);
+        v = !v;
+    }
+    bool active = m_item_active == label;
+
+    // draw check
+    {
+        Col color = active  ? m_colors.frame_active :
+                    hovered ? m_colors.frame_hovered :
+                              m_colors.frame;
+        w->dc.draw_rect(bb, color, RECT_FILL_ROUND_1);
+
+        if (v) {
+            w->dc.draw_rect(bb.expand(-6), m_colors.handle, RECT_FILL);
+        }
+    }
+
+    // draw label
+    {
+        w->dc.draw_text(rect.min + Vec(check_width + 2, 6), label);
+    }
+
+    w->cursor_pos.y = rect.max.y;
+    w->content_rect.max = glm::max(w->content_rect.max, rect.max);
+
     return clicked;
 }
 
@@ -492,12 +537,12 @@ bool drag_float(const char* label, float& v, float speed, float min, float max, 
 
     Vec s = get_text_size(label);
     Rect item_rect  = { w->cursor_pos,
-                        w->cursor_pos + Vec(item_width_default, s.y) + Vec(12, 16) };
+                        w->cursor_pos + Vec(item_width_default, s.y) + Vec(12) };
 
     Rect label_rect = { item_rect.tr(),
-                        item_rect.tr() + s + Vec(4, 16) };
+                        item_rect.tr() + s + Vec(4, 12) };
 
-    Rect bb = item_rect.expand({ -2, -4 });
+    Rect bb = item_rect.expand(-2);
 
     bool hovered = w == m_window_hovered && bb.contains(m_mouse_pos);
     if (hovered) m_item_hovered = label;
@@ -526,29 +571,24 @@ bool drag_float(const char* label, float& v, float speed, float min, float max, 
                     hovered ? m_colors.frame_hovered :
                               m_colors.frame;
 
-        w->dc.draw_rect(bb, color, RECT_FILL);
+        w->dc.draw_rect(bb, color, RECT_FILL_ROUND_1);
 
         // handle
         if (min < max) {
-
-            Col color = active  ? m_colors.handle_active :
-                        hovered ? m_colors.handle_hovered :
-                                  m_colors.handle;
-
             int x = (bb.size().x - 4) * (v - min) / (max - min);
             Rect handle_rect = { Vec(bb.min.x + x, bb.min.y),
                                  Vec(bb.min.x + x + 4, bb.max.y) };
-            w->dc.draw_rect(handle_rect, color);
+            w->dc.draw_rect(handle_rect, m_colors.handle);
         }
 
         print_to_text_buffer(fmt, v);
         Vec s = get_text_size(m_text_buffer.data());
-        w->dc.draw_text(item_rect.center() - Vec(s.x / 2, s.y / 2), m_text_buffer.data());
+        w->dc.draw_text(bb.center() - Vec(s.x / 2, s.y / 2), m_text_buffer.data());
     }
 
     // draw label
     {
-        w->dc.draw_text(label_rect.min + Vec(2, 8), label);
+        w->dc.draw_text(label_rect.min + Vec(2, 6), label);
     }
 
     w->cursor_pos.y = label_rect.max.y;
