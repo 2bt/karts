@@ -105,74 +105,10 @@ float                 spring_damping     = 0.1;
 
 
 void Kart::update() {
-    btTransform trans;
-    m_motion_state->getWorldTransform(trans);
-    trans.getOpenGLMatrix(reinterpret_cast<float*>(&m_model.transform));
-
-    static bool physics = true;
-    gui::checkbox("physics", physics);
-    if (!physics) return;
-
-    gui::drag_float("spring length", spring_rest_length, 0, 0.1, 3);
-    gui::drag_float("spring constant", spring_constant, 0, 1000, 60000);
-    gui::drag_float("spring damping", spring_damping, 0, 0, 0.5);
-
-
-    const glm::vec3 kart_normal = glm::vec3(m_model.transform * glm::vec4(0, 1, 0, 0));
-
-    // suspension
-    for (int i = 0; i < 4; ++i) {
-        Spring& spring = m_springs[i];
-
-        const glm::vec2 vs[] = {
-            glm::vec2( 1,  1),
-            glm::vec2(-1,  1),
-            glm::vec2( 1, -1),
-            glm::vec2(-1, -1),
-        };
-        const glm::vec3 v        = glm::vec3(vs[i].x * m_size.x, 0, vs[i].y * m_size.z) * 1.05f;
-
-        // reset spring
-        spring.start_point       = glm::vec3(m_model.transform * glm::vec4(v, 1));
-        spring.end_point         = spring.start_point - kart_normal * spring_rest_length;
-        spring.touches_ground    = false;
-        spring.compression_ratio = 0;
-        spring.force             = 0;
-
-        btVector3 sp = to_bt(spring.start_point);
-        btVector3 ep = to_bt(spring.end_point);
-        btCollisionWorld::ClosestRayResultCallback cb(sp, ep);
-        m_world->rayTest(sp, ep, cb);
-        if (cb.hasHit()) {
-            spring.end_point         = to_glm(cb.m_hitPointWorld);
-            spring.touches_ground    = true;
-            spring.ground_normal     = to_glm(cb.m_hitNormalWorld);
-            spring.compression_ratio = 1 - cb.m_closestHitFraction;
-            spring.force             = spring_constant * spring.compression_ratio;
-
-            // damping
-            float vel = (spring.old_compression_ratio - spring.compression_ratio) * 60;
-            float damping_force = vel * spring_constant * spring_damping;
-            if (damping_force > 0) damping_force *= 0.9;
-            spring.force -= damping_force;
-
-            // clamping
-            spring.force = glm::clamp(spring.force, 0.0f, 10000.0f);
-
-            m_rigid_body->applyForce(to_bt(kart_normal) * spring.force, sp - trans.getOrigin());
-        }
-        spring.old_compression_ratio = spring.compression_ratio;
-
-        //if (i == 0) LOG("%*s", int(30 + spring_force  * 0.01), "#");
-
-        gui::text("compression: %9.3f\n"
-                  "force:       %9.3f", spring.compression_ratio, spring.force);
-    }
-
 
     // random impulse
-    static bool old_q;
     const Uint8* ks = SDL_GetKeyboardState(nullptr);
+    static bool old_q;
     bool q = ks[SDL_SCANCODE_RETURN];
     if (gui::button("random impulse") | (q && !old_q)) {
         auto randf = []() { return rand() / (float) RAND_MAX; };
@@ -182,6 +118,7 @@ void Kart::update() {
     }
     old_q = q;
 
+    // reset transform
     if (gui::button("reset transform") || ks[SDL_SCANCODE_X]) {
         btTransform& t = m_rigid_body->getWorldTransform();
         t.setOrigin(btVector3(0, 3, 0));
@@ -189,15 +126,94 @@ void Kart::update() {
         m_motion_state->setWorldTransform(t);
     }
 
-    m_rigid_body->applyTorque(
-            btVector3(0, (ks[SDL_SCANCODE_C] - ks[SDL_SCANCODE_V]) * 1000, 0));
 
+    gui::drag_float("spring length", spring_rest_length, 0, 0.1, 3);
+    gui::drag_float("spring constant", spring_constant, 0, 1000, 60000);
+    gui::drag_float("spring damping", spring_damping, 0, 0, 0.5);
+
+
+
+    // update model transform
+    btTransform trans;
+    m_motion_state->getWorldTransform(trans);
+    trans.getOpenGLMatrix(reinterpret_cast<float*>(&m_model.transform));
+
+    static bool spring_physics = true;
+    gui::checkbox("enable spring physics", spring_physics);
+    if (spring_physics) {
+
+        // suspension
+        const glm::vec3 kart_normal = glm::vec3(m_model.transform * glm::vec4(0, 1, 0, 0));
+        for (int i = 0; i < 4; ++i) {
+            Spring& spring = m_springs[i];
+
+            const glm::vec2 vs[] = {
+                glm::vec2( 1,  1),
+                glm::vec2(-1,  1),
+                glm::vec2( 1, -1),
+                glm::vec2(-1, -1),
+            };
+            const glm::vec3 v        = glm::vec3(vs[i].x * m_size.x, 0, vs[i].y * m_size.z) * 1.05f;
+
+            // reset spring
+            spring.start_point       = glm::vec3(m_model.transform * glm::vec4(v, 1));
+            spring.end_point         = spring.start_point - kart_normal * spring_rest_length;
+            spring.touches_ground    = false;
+            spring.compression_ratio = 0;
+            spring.force             = 0;
+
+            btVector3 sp = to_bt(spring.start_point);
+            btVector3 ep = to_bt(spring.end_point);
+            btCollisionWorld::ClosestRayResultCallback cb(sp, ep);
+            m_world->rayTest(sp, ep, cb);
+            if (cb.hasHit()) {
+                spring.end_point         = to_glm(cb.m_hitPointWorld);
+                spring.touches_ground    = true;
+                spring.ground_normal     = to_glm(cb.m_hitNormalWorld);
+                spring.compression_ratio = 1 - cb.m_closestHitFraction;
+                spring.force             = spring_constant * spring.compression_ratio;
+
+                // damping
+                float vel = (spring.old_compression_ratio - spring.compression_ratio) * 60;
+                float damping_force = vel * spring_constant * spring_damping;
+                if (damping_force > 0) damping_force *= 0.9;
+                spring.force -= damping_force;
+
+                // clamping
+                spring.force = glm::clamp(spring.force, 0.0f, 10000.0f);
+
+                m_rigid_body->applyForce(to_bt(kart_normal) * spring.force, sp - trans.getOrigin());
+            }
+            spring.old_compression_ratio = spring.compression_ratio;
+
+            //if (i == 0) LOG("%*s", int(30 + spring_force  * 0.01), "#");
+
+            gui::text("compression: %9.3f\n"
+                      "force:       %9.3f", spring.compression_ratio, spring.force);
+        }
+    }
+
+
+    // movement
+    {
+        int steering = !!ks[SDL_SCANCODE_J] - !!ks[SDL_SCANCODE_L];
+        m_rigid_body->applyTorque(btVector3(0, steering * 4000, 0));
+
+        if (m_springs[2].touches_ground || m_springs[3].touches_ground) {
+            float engine = !!ks[SDL_SCANCODE_I] - !!ks[SDL_SCANCODE_K] * 0.5;
+            m_rigid_body->applyForce(
+                trans.getBasis() * btVector3(0, 0, 10000 * engine ),
+                trans.getBasis() * btVector3(0, -0.1, -1));
+        }
+
+
+    }
 
     // pull up
     {
         int d = ks[SDL_SCANCODE_PERIOD] - ks[SDL_SCANCODE_COMMA];
         glm::vec3 p = glm::vec3(m_model.transform * glm::vec4(m_pick_pos, 1));
-        m_rigid_body->applyForce(btVector3(0, d * 10000, 0),
+        m_rigid_body->applyForce(btVector3(0, d * 15000, 0),
                                  to_bt(p) - trans.getOrigin());
     }
 }

@@ -364,12 +364,12 @@ void new_frame() {
     }
 
     // have a default debug window
-    gui::begin_window("Debug");
+    begin_window("Debug");
 }
 
 
 void render() {
-    gui::end_window();
+    end_window();
 
     glm::vec2 scale = { 1.0f / rmw::context.get_width(),
                         1.0f / rmw::context.get_height() };
