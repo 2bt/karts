@@ -90,11 +90,10 @@ struct Spring {
     glm::vec3 start_point;
     glm::vec3 end_point;
 
-    float     length;
-    float     old_length;
 
     bool      touches_ground;
     float     compression_ratio;
+    float     old_compression_ratio;
     glm::vec3 ground_normal;
     float     force;
 };
@@ -128,30 +127,28 @@ void Kart::update() {
             glm::vec2( 1, -1),
             glm::vec2(-1, -1),
         };
+        const glm::vec3 v        = glm::vec3(vs[i].x * m_size.x, 0, vs[i].y * m_size.z) * 1.05f;
 
-        const glm::vec3 v      = glm::vec3(vs[i].x * m_size.x, 0, vs[i].y * m_size.z) * 1.05f;
-        spring.start_point     = glm::vec3(m_model.transform * glm::vec4(v, 1));
-        spring.end_point       = spring.start_point - kart_normal * spring_rest_length;
-        spring.touches_ground  = false;
-        spring.length          = spring_rest_length;
-        spring.force           = 0;
+        // reset spring
+        spring.start_point       = glm::vec3(m_model.transform * glm::vec4(v, 1));
+        spring.end_point         = spring.start_point - kart_normal * spring_rest_length;
+        spring.touches_ground    = false;
+        spring.compression_ratio = 0;
+        spring.force             = 0;
 
         btVector3 sp = to_bt(spring.start_point);
         btVector3 ep = to_bt(spring.end_point);
         btCollisionWorld::ClosestRayResultCallback cb(sp, ep);
         m_world->rayTest(sp, ep, cb);
         if (cb.hasHit()) {
-            spring.touches_ground    = true;
             spring.end_point         = to_glm(cb.m_hitPointWorld);
+            spring.touches_ground    = true;
             spring.ground_normal     = to_glm(cb.m_hitNormalWorld);
-            spring.compression_ratio = cb.m_closestHitFraction;
-
-
-            spring.length *= spring.compression_ratio;
-            spring.force   = spring_constant * (spring_rest_length - spring.length);
+            spring.compression_ratio = 1 - cb.m_closestHitFraction;
+            spring.force             = spring_constant * spring.compression_ratio;
 
             // damping
-            float vel = (spring.length - spring.old_length) * 60;
+            float vel = (spring.old_compression_ratio - spring.compression_ratio) * 60;
             float damping_force = vel * spring_constant * spring_damping;
             if (damping_force > 0) damping_force *= 0.9;
             spring.force -= damping_force;
@@ -161,7 +158,7 @@ void Kart::update() {
 
             m_rigid_body->applyForce(to_bt(kart_normal) * spring.force, sp - trans.getOrigin());
         }
-        spring.old_length = spring.length;
+        spring.old_compression_ratio = spring.compression_ratio;
 
         //if (i == 0) LOG("%*s", int(30 + spring_force  * 0.01), "#");
 
