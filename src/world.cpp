@@ -169,16 +169,16 @@ void World::update_camera() {
 
 
 void World::update_light() {
+    float area = 25;
 
     float cy = cosf(m_camera.ang_y);
     float sy = sinf(m_camera.ang_y);
     m_light.pos = glm::vec3(m_camera.pos.x, 0, m_camera.pos.z) +
-                  glm::vec3(sy, 0, -cy) * 8.0f;
+                  glm::vec3(sy, 0, -cy) * area * 0.7f;
 
     glm::mat4 view = glm::lookAt(m_light.pos - m_light.dir * 20.0f,
                                  m_light.pos, glm::vec3(0, 1, 0));
-    float s = 10;
-    glm::mat4 proj = glm::ortho(-s, s, -s, s, 0.0f, s * 3);
+    glm::mat4 proj = glm::ortho(-area, area, -area, area, 0.0f, 40.0f);
 
     m_light.vp_mat = proj * view;
     m_model_shader->set_uniform("light_map_size", (float) m_light.shadow_map->get_width());

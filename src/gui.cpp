@@ -484,7 +484,7 @@ void text(const char* fmt, ...) {
 }
 
 
-const int item_width_default = 16 * FONT_WIDTH;
+const int item_width_default = 20 * FONT_WIDTH;
 
 
 bool drag_float(const char* label, float& v, float speed, float min, float max, const char* fmt) {
@@ -509,8 +509,14 @@ bool drag_float(const char* label, float& v, float speed, float min, float max, 
     bool active = m_item_active == label;
     float old_v = v;
     if (active) {
-        v += m_mouse_mov.x * speed;
-        if (min < max) v = glm::clamp(v, min, max);
+        if (min < max) {
+            // no need for speed
+            v +=  m_mouse_mov.x * (max - min) / (bb.size().x - 4) * 0.5;
+            v = glm::clamp(v, min, max);
+        }
+        else {
+            v += m_mouse_mov.x * speed;
+        }
     }
     bool changed = v != old_v;
 
