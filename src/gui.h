@@ -19,9 +19,11 @@ namespace gui {
     void end_window();
 
     void same_line(short offset = 0);
+    void separator();
 
+    void text(const char* fmt, ...);
     bool button(const char* label);
     bool checkbox(const char* label, bool& v);
-    void text(const char* fmt, ...);
+    bool radio_button(const char* label, int& v, int value);
     bool drag_float(const char* label, float& v, float speed = 1, float min = 0, float max = 0, const char* fmt = "%.3f");
 }

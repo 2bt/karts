@@ -166,7 +166,6 @@ private:
 
 
 struct Window {
-    Window*     next;
     const char* name;
     Rect        rect;
 
@@ -197,7 +196,6 @@ rmw::Texture2D::Ptr                  m_texture;
 rmw::Shader::Ptr                     m_shader;
 rmw::VertexArray::Ptr                m_va;
 rmw::VertexBuffer::Ptr               m_vb;
-
 
 std::array<char, 1024>               m_text_buffer;
 
@@ -461,6 +459,31 @@ void same_line(short offset) {
 }
 
 
+void separator() {
+    Window* w = m_window_stack.back();
+    Vec size;
+    bool sl = w->same_line;
+    if (sl) size = Vec(5, w->current_line.size().y);
+    else size = Vec(w->rect.size().x - 8, 5);
+    w->dc.draw_rect(new_item_rect(w, size).expand(-2), { 255, 255, 255, 50 }, RECT_FILL);
+    if (sl) same_line();
+}
+
+
+void text(const char* fmt, ...) {
+    Window* w = m_window_stack.back();
+
+    va_list args;
+    va_start(args, fmt);
+    print_to_text_buffer(fmt, args);
+    va_end(args);
+
+    Rect rect = new_item_rect(w, text_size(m_text_buffer.data()) + Vec(4));
+
+    w->dc.draw_text(rect.min + Vec(2), m_text_buffer.data());
+}
+
+
 bool button(const char* label) {
     Window* w = m_window_stack.back();
 
@@ -530,17 +553,48 @@ bool checkbox(const char* label, bool& v) {
 }
 
 
-void text(const char* fmt, ...) {
+bool radio_button(const char* label, int& v, int value) {
     Window* w = m_window_stack.back();
 
-    va_list args;
-    va_start(args, fmt);
-    print_to_text_buffer(fmt, args);
-    va_end(args);
+    Vec s = text_size(label);
 
-    Rect rect = new_item_rect(w, text_size(m_text_buffer.data()) + Vec(4));
+    float check_width = s.y + 12;
+    float label_width = s.x + 4;
 
-    w->dc.draw_text(rect.min + Vec(2), m_text_buffer.data());
+    Rect rect = new_item_rect(w, Vec(check_width + label_width, check_width));
+
+    Rect bb = Rect(rect.min, rect.min + Vec(check_width)).expand(-2);
+
+    bool hovered = w == m_window_hovered && rect.expand(-2).contains(m_mouse_pos);
+    if (hovered) m_item_hovered = label;
+    bool clicked = hovered && m_mouse_buttons_clicked[0];
+    bool changed = false;
+    if (clicked) {
+        m_item_active = label;
+        move_window_to_front(w);
+        changed = v != value;
+        v = value;
+    }
+    bool active = m_item_active == label;
+
+    // draw check
+    {
+        Col color = active  ? m_colors.frame_active :
+                    hovered ? m_colors.frame_hovered :
+                              m_colors.frame;
+        w->dc.draw_rect(bb, color, RECT_FILL_ROUND_1);
+
+        if (v == value) {
+            w->dc.draw_rect(bb.expand(-6), m_colors.handle, RECT_FILL);
+        }
+    }
+
+    // draw label
+    {
+        w->dc.draw_text(rect.min + Vec(check_width + 2, 6), label);
+    }
+
+    return changed;
 }
 
 

@@ -163,8 +163,11 @@ void World::update_camera() {
 
     renderer3D.set_transformation(m_camera.vp_mat);
 
-    gui::text("camera:\n%7.3f %7.3f\n%7.3f %7.3f %7.3f", m_camera.ang_x, m_camera.ang_y,
+    gui::text("camera:\n%7.3f %7.3f\n%7.3f %7.3f %7.3f",
+              m_camera.ang_x, m_camera.ang_y,
               m_camera.pos.x, m_camera.pos.y, m_camera.pos.z);
+
+    gui::separator();
 }
 
 
