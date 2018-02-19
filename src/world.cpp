@@ -100,14 +100,14 @@ void World::init() {
         vec3 specular = vec3(0.3) * pow(max(dot(v_norm, halfway), 0.0), shininess) * v;
         vec3 color = ambient + diffuse + specular;
         vec3 fog = vec3(0.1, 0.15, 0.25);
-        gl_FragColor = vec4(mix(fog, color, pow(0.95, v_depth)), 1.0);
+        gl_FragColor = vec4(mix(fog, color, pow(0.97, v_depth)), 1.0);
     })");
 
 
 
     m_camera.ang_x = 0.75;
-    m_camera.ang_y = -0.69;
-    m_camera.pos = { 4.665983, 6.837914, 5.553909 };
+    m_camera.ang_y = 0;
+    m_camera.pos = { 0, 10, 7 };
     m_camera.fov = 60;
 
 
@@ -151,9 +151,29 @@ void World::update_camera() {
     float cx = cosf(m_camera.ang_x);
     float sx = sinf(m_camera.ang_x);
 
-    m_camera.pos += glm::vec3(x * cy - z * sy * cx + sy * sx * y,
-                              y * cx + z * sx,
-                              x * sy + z * cy * cx - cy * sx * y);
+
+    static bool follow = true;
+    gui::checkbox("follow kart", follow);
+    if (follow) {
+        float cy = cosf(m_camera.ang_y);
+        float sy = sinf(m_camera.ang_y);
+        float cx = cosf(m_camera.ang_x);
+        float sx = sinf(m_camera.ang_x);
+
+        m_camera.pos = m_kart.get_pos();
+        m_camera.pos += glm::vec3(-sy * cx, sx, cy * cx) * 20.0f;
+    }
+    else {
+        m_camera.pos += glm::vec3(x * cy - z * sy * cx + sy * sx * y,
+                                  y * cx + z * sx,
+                                  x * sy + z * cy * cx - cy * sx * y);
+    }
+
+    gui::text("camera:\n%7.3f %7.3f\n%7.3f %7.3f %7.3f",
+              m_camera.ang_x, m_camera.ang_y,
+              m_camera.pos.x, m_camera.pos.y, m_camera.pos.z);
+
+    gui::separator();
 
     m_camera.vp_mat = glm::perspective(glm::radians(m_camera.fov),
                                        rmw::context.get_aspect_ratio(), 0.1f, 100.0f) *
@@ -162,12 +182,6 @@ void World::update_camera() {
                       glm::translate(-m_camera.pos);
 
     renderer3D.set_transformation(m_camera.vp_mat);
-
-    gui::text("camera:\n%7.3f %7.3f\n%7.3f %7.3f %7.3f",
-              m_camera.ang_x, m_camera.ang_y,
-              m_camera.pos.x, m_camera.pos.y, m_camera.pos.z);
-
-    gui::separator();
 }
 
 

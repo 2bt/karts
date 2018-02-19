@@ -23,7 +23,8 @@ void init_model(Model& model, const Mesh& mesh) {
 
 void Map::init(btDynamicsWorld* world) {
     // XXX: the mesh must be kept alive because the shape needs it
-    m_mesh.load("assets/hill.obj");
+//    m_mesh.load("assets/hill.obj");
+    m_mesh.load("assets/playground.obj");
     for (auto& v : m_mesh.vertices) v.p *= 3.0f;
 
     init_model(m_model, m_mesh);

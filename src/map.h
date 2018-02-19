@@ -48,6 +48,10 @@ public:
     void debug_draw();
     void pick(const glm::vec3& pos, const glm::vec3& normal) override;
 
+    glm::vec3 get_pos() const {
+        return glm::vec3(m_model.transform[3]);
+    }
+
 private:
     glm::vec3                             m_size;
     std::unique_ptr<btBoxShape>           m_shape;
