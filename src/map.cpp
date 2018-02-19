@@ -128,11 +128,6 @@ void Kart::update() {
     }
 
 
-    gui::drag_float("spring length", spring_rest_length, 0, 0.1, 3);
-    gui::drag_float("spring constant", spring_constant, 0, 1000, 60000);
-    gui::drag_float("spring damping", spring_damping, 0, 0, 0.5);
-
-
 
     // update model transform
     btTransform trans;
@@ -140,8 +135,14 @@ void Kart::update() {
     trans.getOpenGLMatrix(reinterpret_cast<float*>(&m_model.transform));
 
     static bool spring_physics = true;
+    gui::separator();
     gui::checkbox("enable spring physics", spring_physics);
     if (spring_physics) {
+
+        gui::drag_float("spring length", spring_rest_length, 0, 0.1, 3);
+        gui::drag_float("spring constant", spring_constant, 0, 1000, 60000);
+        gui::drag_float("spring damping", spring_damping, 0, 0, 0.5);
+
 
         // suspension
         const glm::vec3 kart_normal = glm::vec3(m_model.transform * glm::vec4(0, 1, 0, 0));

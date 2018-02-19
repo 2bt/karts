@@ -1,16 +1,17 @@
 // vim: et ts=4 sts=4 sw=4
 #pragma once
 #include <glm/glm.hpp>
+#include <SDL2/SDL.h>
 
 
 namespace gui {
 
     using Vec = glm::i16vec2;
-    using Col = glm::u8vec4;
 
     void init();
     void kill();
 
+    bool process_event(const SDL_Event& e);
     void new_frame();
     void render();
 

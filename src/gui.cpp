@@ -10,6 +10,9 @@ namespace gui {
 namespace {
 
 
+using Col = glm::u8vec4;
+
+
 enum {
     FONT_WIDTH  = 7,
     FONT_HEIGHT = 12,
@@ -181,6 +184,7 @@ Vec                                  m_mouse_pos;
 Vec                                  m_mouse_mov;
 std::array<bool, 3>                  m_mouse_buttons;
 std::array<bool, 3>                  m_mouse_buttons_clicked;
+int                                  m_mouse_wheel;
 
 const char*                          m_item_active;
 const char*                          m_item_hovered;
@@ -340,6 +344,16 @@ void kill() {
 }
 
 
+bool process_event(const SDL_Event& e) {
+    switch (e.type) {
+    case SDL_MOUSEWHEEL:
+        m_mouse_wheel += e.wheel.y;
+        return true;
+    default: return false;
+    }
+}
+
+
 void new_frame() {
     // mouse
     int x, y;
@@ -356,7 +370,6 @@ void new_frame() {
     Vec p = { x, y };
     m_mouse_mov = p - m_mouse_pos;
     m_mouse_pos = p;
-
 
     // reset things
     if (!m_mouse_buttons[0]) {
@@ -388,6 +401,8 @@ void new_frame() {
 
 void render() {
     end_window();
+
+    m_mouse_wheel = 0;
 
     glm::vec2 scale = { 1.0f / rmw::context.get_width(),
                         1.0f / rmw::context.get_height() };
@@ -619,14 +634,14 @@ bool drag_float(const char* label, float& v, float speed, float min, float max, 
     }
     bool active = m_item_active == label;
     float old_v = v;
-    if (active) {
+    if (active || (hovered && m_mouse_wheel != 0)) {
         if (min < max) {
             // no need for speed
-            v +=  m_mouse_mov.x * (max - min) / (bb.size().x - 4) * 0.5;
+            v +=  (m_mouse_mov.x + m_mouse_wheel) * (max - min) / (bb.size().x - 4) * 0.5;
             v = glm::clamp(v, min, max);
         }
         else {
-            v += m_mouse_mov.x * speed;
+            v += (m_mouse_mov.x + m_mouse_wheel) * speed;
         }
     }
     bool changed = v != old_v;

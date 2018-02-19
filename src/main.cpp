@@ -19,6 +19,7 @@ public:
     bool loop() {
         SDL_Event e;
         while (rmw::context.poll_event(e)) {
+            if (gui::process_event(e)) continue;
             switch (e.type) {
             case SDL_QUIT: return false;
             case SDL_KEYDOWN:
