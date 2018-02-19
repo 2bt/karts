@@ -119,6 +119,7 @@ void Kart::update() {
     old_q = q;
 
     // reset transform
+    gui::same_line();
     if (gui::button("reset transform") || ks[SDL_SCANCODE_X]) {
         btTransform& t = m_rigid_body->getWorldTransform();
         t.setOrigin(btVector3(0, 3, 0));

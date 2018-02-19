@@ -171,7 +171,8 @@ struct Window {
     Rect        rect;
 
     // drawing
-    Vec         cursor_pos;
+    bool        same_line;
+    Rect        current_line;
     Rect        content_rect;
     DrawContext dc;
 };
@@ -243,8 +244,19 @@ void move_window_to_front(Window* w) {
 
 
 Rect new_item_rect(Window* w, const Vec& size) {
-    Rect rect = { w->cursor_pos, w->cursor_pos + size };
-    w->cursor_pos.y = rect.max.y;
+    Vec pos;
+    if (w->same_line) {
+        w->same_line = false;
+        pos = { w->current_line.max.x, w->current_line.min.y };
+        short h = w->current_line.size().y;
+        if (h > size.y) pos.y += (h - size.y) / 2;
+        w->current_line.max = glm::max(w->current_line.max, pos + size);
+    }
+    else {
+        pos = w->current_line.bl();
+        w->current_line = { pos, pos + size };
+    }
+    Rect rect = { pos, pos + size };
     w->content_rect.max = glm::max(w->content_rect.max, rect.max);
     return rect;
 }
@@ -422,23 +434,30 @@ void begin_window(const char* name) {
         w->rect.max += m_mouse_mov;
     }
 
-    Vec s = text_size(name);
-    Rect title_rect = { w->rect.min, w->rect.min + s + Vec(12) };
-    w->rect.max = max(w->rect.max, title_rect.max);
+    Rect title_rect  = { w->rect.min, w->rect.min + text_size(name) + Vec(12) };
+    w->rect.max      = glm::max(w->rect.max, title_rect.max);
     title_rect.max.x = w->rect.max.x;
 
     w->dc.draw_rect(w->rect, m_colors.window, RECT_FILL_ROUND_3);
     w->dc.draw_rect(title_rect, m_colors.window_title, RECT_FILL_ROUND_3);
     w->dc.draw_text(title_rect.min + Vec(6), name);
 
-    w->cursor_pos = title_rect.bl() + Vec(4);
-    w->content_rect.min = w->cursor_pos;
-    w->content_rect.max = w->cursor_pos;
+    Vec p = title_rect.bl() + Vec(4);
+    w->content_rect = { p, p };
+    w->current_line = { p, p };
 }
 
 
 void end_window() {
     m_window_stack.pop_back();
+}
+
+
+void same_line(short offset) {
+    Window* w = m_window_stack.back();
+    w->same_line = true;
+    w->current_line.max.x = std::max<short>(w->current_line.max.x,
+                                            w->current_line.min.x + offset);
 }
 
 
@@ -568,7 +587,7 @@ bool drag_float(const char* label, float& v, float speed, float min, float max, 
 
         // handle
         if (min < max) {
-            int x = (bb.size().x - 4) * (v - min) / (max - min);
+            short x = (bb.size().x - 4) * (v - min) / (max - min);
             Rect handle_rect = { Vec(bb.min.x + x, bb.min.y),
                                  Vec(bb.min.x + x + 4, bb.max.y) };
             w->dc.draw_rect(handle_rect, m_colors.handle);

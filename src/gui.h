@@ -18,6 +18,8 @@ namespace gui {
     void begin_window(const char* name);
     void end_window();
 
+    void same_line(short offset = 0);
+
     bool button(const char* label);
     bool checkbox(const char* label, bool& v);
     void text(const char* fmt, ...);
