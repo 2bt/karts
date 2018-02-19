@@ -242,7 +242,15 @@ void move_window_to_front(Window* w) {
 }
 
 
-Vec get_text_size(const char* text) {
+Rect new_item_rect(Window* w, const Vec& size) {
+    Rect rect = { w->cursor_pos, w->cursor_pos + size };
+    w->cursor_pos.y = rect.max.y;
+    w->content_rect.max = glm::max(w->content_rect.max, rect.max);
+    return rect;
+}
+
+
+Vec text_size(const char* text) {
     Vec s = { 0, FONT_HEIGHT };
     short x = 0;
     while (char c = *text++) {
@@ -414,7 +422,7 @@ void begin_window(const char* name) {
         w->rect.max += m_mouse_mov;
     }
 
-    Vec s = get_text_size(name);
+    Vec s = text_size(name);
     Rect title_rect = { w->rect.min, w->rect.min + s + Vec(12) };
     w->rect.max = max(w->rect.max, title_rect.max);
     title_rect.max.x = w->rect.max.x;
@@ -437,8 +445,7 @@ void end_window() {
 bool button(const char* label) {
     Window* w = m_window_stack.back();
 
-    Vec s = get_text_size(label);
-    Rect rect = { w->cursor_pos, w->cursor_pos + s + Vec(12) };
+    Rect rect = new_item_rect(w, text_size(label) + Vec(12));
 
     Rect bb = rect.expand(-2);
     bool hovered = w == m_window_hovered && bb.contains(m_mouse_pos);
@@ -457,9 +464,6 @@ bool button(const char* label) {
     w->dc.draw_rect(bb, color, RECT_FILL_ROUND_1);
     w->dc.draw_text(bb.min + Vec(4), label);
 
-    w->cursor_pos.y = rect.max.y;
-    w->content_rect.max = max(w->content_rect.max, rect.max);
-
     return clicked;
 }
 
@@ -467,13 +471,12 @@ bool button(const char* label) {
 bool checkbox(const char* label, bool& v) {
     Window* w = m_window_stack.back();
 
-    Vec s = get_text_size(label);
+    Vec s = text_size(label);
 
     float check_width = s.y + 12;
     float label_width = s.x + 4;
 
-    Rect rect = { w->cursor_pos,
-                  w->cursor_pos + Vec(check_width + label_width, check_width) };
+    Rect rect = new_item_rect(w, Vec(check_width + label_width, check_width));
 
     Rect bb = Rect(rect.min, rect.min + Vec(check_width)).expand(-2);
 
@@ -504,9 +507,6 @@ bool checkbox(const char* label, bool& v) {
         w->dc.draw_text(rect.min + Vec(check_width + 2, 6), label);
     }
 
-    w->cursor_pos.y = rect.max.y;
-    w->content_rect.max = glm::max(w->content_rect.max, rect.max);
-
     return clicked;
 }
 
@@ -519,13 +519,9 @@ void text(const char* fmt, ...) {
     print_to_text_buffer(fmt, args);
     va_end(args);
 
-    Vec s = get_text_size(m_text_buffer.data());
-    Rect rect = { w->cursor_pos, w->cursor_pos + s + Vec(4) };
+    Rect rect = new_item_rect(w, text_size(m_text_buffer.data()) + Vec(4));
 
     w->dc.draw_text(rect.min + Vec(2), m_text_buffer.data());
-
-    w->cursor_pos.y = rect.max.y;
-    w->content_rect.max = glm::max(w->content_rect.max, rect.max);
 }
 
 
@@ -535,14 +531,11 @@ const int item_width_default = 20 * FONT_WIDTH;
 bool drag_float(const char* label, float& v, float speed, float min, float max, const char* fmt) {
     Window* w = m_window_stack.back();
 
-    Vec s = get_text_size(label);
-    Rect item_rect  = { w->cursor_pos,
-                        w->cursor_pos + Vec(item_width_default, s.y) + Vec(12) };
+    Vec s = text_size(label);
+    Rect rect = new_item_rect(w, Vec(item_width_default + 12 + s.x + 4, s.y + 12));
 
-    Rect label_rect = { item_rect.tr(),
-                        item_rect.tr() + s + Vec(4, 12) };
-
-    Rect bb = item_rect.expand(-2);
+    Rect drag_rect  = { rect.min, rect.min + Vec(item_width_default + 12, s.y + 12) };
+    Rect bb = drag_rect.expand(-2);
 
     bool hovered = w == m_window_hovered && bb.contains(m_mouse_pos);
     if (hovered) m_item_hovered = label;
@@ -582,17 +575,14 @@ bool drag_float(const char* label, float& v, float speed, float min, float max, 
         }
 
         print_to_text_buffer(fmt, v);
-        Vec s = get_text_size(m_text_buffer.data());
+        Vec s = text_size(m_text_buffer.data());
         w->dc.draw_text(bb.center() - Vec(s.x / 2, s.y / 2), m_text_buffer.data());
     }
 
     // draw label
     {
-        w->dc.draw_text(label_rect.min + Vec(2, 6), label);
+        w->dc.draw_text(drag_rect.tr() + Vec(2, 6), label);
     }
-
-    w->cursor_pos.y = label_rect.max.y;
-    w->content_rect.max = glm::max(w->content_rect.max, label_rect.max);
 
     return changed;
 }
