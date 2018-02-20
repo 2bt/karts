@@ -2,7 +2,7 @@
 #pragma once
 #include "rmw.h"
 #include "map.h"
-
+#include "kart.h"
 
 
 struct Camera {
