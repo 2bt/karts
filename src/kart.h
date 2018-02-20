@@ -18,7 +18,8 @@ public:
 
 private:
     glm::vec3                             m_size;
-    std::unique_ptr<btBoxShape>           m_shape;
+    std::unique_ptr<btCollisionShape>     m_shape;
+
     std::unique_ptr<btDefaultMotionState> m_motion_state;
     std::unique_ptr<btRigidBody>          m_rigid_body;
     btDynamicsWorld*                      m_world;

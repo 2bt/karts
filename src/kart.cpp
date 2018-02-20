@@ -14,6 +14,8 @@ void Kart::init(btDynamicsWorld* world) {
     m_model.color = { 1.0, 0.7, 0.6 };
 
     // physics
+    // use a simple box
+    // TODO: use btConvexHullShape
     for (auto& v : mesh.vertices) m_size = glm::max(m_size, v.p);
     m_shape = std::make_unique<btBoxShape>(btVector3(m_size.x, m_size.y, m_size.z));
 
@@ -64,7 +66,7 @@ struct Spring {
 };
 
 std::array<Spring, 4> m_springs;
-float                 spring_rest_length = 0.8;
+float                 spring_rest_length = 1;
 float                 spring_constant    = 20000;
 float                 spring_damping     = 0.1;
 
@@ -138,7 +140,7 @@ void Kart::update() {
                 glm::vec2( 1, -1),
                 glm::vec2(-1, -1),
             };
-            const glm::vec3 v        = glm::vec3(vs[i].x * m_size.x, 0, vs[i].y * m_size.z) * 1.05f;
+            const glm::vec3 v        = glm::vec3(vs[i].x * m_size.x, 0.2, vs[i].y * m_size.z) * 0.9f;
 
             // reset spring
             spring.start_point       = glm::vec3(m_model.transform * glm::vec4(v, 1));
@@ -190,7 +192,7 @@ void Kart::update() {
             float engine = !!ks[SDL_SCANCODE_I] - !!ks[SDL_SCANCODE_K] * 0.5;
             m_rigid_body->applyForce(
                 trans.getBasis() * btVector3(0, 0, 10000 * engine ),
-                trans.getBasis() * btVector3(0, -0.1, -1));
+                trans.getBasis() * btVector3(0, -0.3, -1));
         }
 
 
