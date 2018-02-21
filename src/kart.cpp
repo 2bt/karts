@@ -74,9 +74,12 @@ float                 spring_damping     = 0.1;
 
 struct WheelRayResultCallback : public btCollisionWorld::RayResultCallback
 {
-    WheelRayResultCallback() {}
-    btVector3 m_hitNormalWorld;
-    virtual btScalar addSingleResult(btCollisionWorld::LocalRayResult& rayResult, bool normalInWorldSpace) {
+    btCollisionObject* m_kart;
+    btVector3          m_hitNormalWorld;
+
+    btScalar addSingleResult(btCollisionWorld::LocalRayResult& rayResult, bool normalInWorldSpace) override {
+        if (rayResult.m_collisionObject == m_kart) return 1;
+
         m_closestHitFraction = rayResult.m_hitFraction;
         m_collisionObject    = rayResult.m_collisionObject;
         if (normalInWorldSpace) {
@@ -152,6 +155,7 @@ void Kart::update() {
             btVector3 sp = to_bt(spring.start_point);
             btVector3 ep = to_bt(spring.end_point);
             WheelRayResultCallback callback;
+            callback.m_kart = m_rigid_body.get();
             m_world->rayTest(sp, ep, callback);
             if (callback.hasHit()) {
                 spring.end_point         = glm::mix(spring.start_point,
